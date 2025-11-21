@@ -124,7 +124,11 @@ export const UI_TEXT = {
     versions: '版本',
     latest: '最新',
     delete: '删除',
-    version: '版本'
+    version: '版本',
+    login: '登录',
+    logout: '退出登录',
+    syncing: '同步中...',
+    guest: '访客'
   },
   en: {
     title: 'Nihongo Scene Master',
@@ -158,6 +162,10 @@ export const UI_TEXT = {
     versions: 'Versions',
     latest: 'Latest',
     delete: 'Delete',
-    version: 'Version'
+    version: 'Version',
+    login: 'Log In',
+    logout: 'Log Out',
+    syncing: 'Syncing...',
+    guest: 'Guest'
   }
 };

@@ -3,14 +3,17 @@ import { Home } from './components/Home';
 import { StudyView } from './components/StudyView';
 import { FavoritesView } from './components/FavoritesView';
 import { ScenariosListView } from './components/ScenariosListView';
+import { UserMenu } from './components/UserMenu';
 import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem } from './types';
 import { generateScenarioContent } from './services/geminiService';
+import { subscribeToAuth, syncUserData, saveUserData, GUEST_USER, GUEST_ID } from './services/firebase';
 import { Loader2, AlertCircle, RefreshCw, Globe, Star } from 'lucide-react';
 import { UI_TEXT } from './constants';
+import { User } from 'firebase/auth';
 
 export default function App() {
   const [viewState, setViewState] = useState<ViewState>(ViewState.HOME);
-  const [currentScenarioId, setCurrentScenarioId] = useState<string>(''); // Stable ID for the current scenario
+  const [currentScenarioId, setCurrentScenarioId] = useState<string>('');
   const [currentContent, setCurrentContent] = useState<ScenarioContent | null>(null);
   const [currentVersions, setCurrentVersions] = useState<ScenarioContent[]>([]);
   const [currentVersionIndex, setCurrentVersionIndex] = useState<number>(0);
@@ -20,33 +23,77 @@ export default function App() {
   // Global State
   const [language, setLanguage] = useState<Language>('zh');
   
-  // Favorites State
-  const [savedItems, setSavedItems] = useState<SavedItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('nihongo_favorites');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  });
+  // Auth State
+  const [user, setUser] = useState<User | null>(null);
+  const [isSyncing, setIsSyncing] = useState(true); // Start true to check auth status
 
-  // History State
-  const [scenarioHistory, setScenarioHistory] = useState<ScenarioHistoryItem[]>(() => {
-    try {
-      const history = localStorage.getItem('nihongo_scenarios');
-      return history ? JSON.parse(history) : [];
-    } catch { return []; }
-  });
+  // Data State
+  const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
+  const [scenarioHistory, setScenarioHistory] = useState<ScenarioHistoryItem[]>([]);
 
   const t = UI_TEXT[language];
 
-  // Persist Favorites
+  // Initialize Local Data on mount (before Auth is ready)
   useEffect(() => {
-    localStorage.setItem('nihongo_favorites', JSON.stringify(savedItems));
-  }, [savedItems]);
+    try {
+      const saved = localStorage.getItem('nihongo_favorites');
+      if (saved) setSavedItems(JSON.parse(saved));
+      
+      const history = localStorage.getItem('nihongo_scenarios');
+      if (history) setScenarioHistory(JSON.parse(history));
+    } catch (e) {
+      console.error("Failed to load local storage", e);
+    }
+  }, []);
 
-  // Persist History
+  // Auth Subscription & Sync
   useEffect(() => {
-    localStorage.setItem('nihongo_scenarios', JSON.stringify(scenarioHistory));
-  }, [scenarioHistory]);
+    const unsubscribe = subscribeToAuth(async (currentUser) => {
+      // If we are already logged in as Guest, ignore null from auth listener (which implies logged out from firebase)
+      if (user?.uid === GUEST_ID && !currentUser) {
+        setIsSyncing(false);
+        return;
+      }
+
+      setUser(currentUser);
+      
+      if (currentUser) {
+        setIsSyncing(true);
+        // Sync/Merge Local data with Cloud
+        const syncedData = await syncUserData(currentUser.uid, {
+          favorites: savedItems,
+          history: scenarioHistory
+        });
+        
+        if (syncedData) {
+          setSavedItems(syncedData.favorites);
+          setScenarioHistory(syncedData.history);
+        }
+        setIsSyncing(false);
+      } else {
+        setIsSyncing(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []); // Note: Dependency array is empty to run only on mount
+
+  // Persistence: Cloud if logged in, Local if not
+  useEffect(() => {
+    if (isSyncing) return; // Don't save while syncing initial load
+
+    if (user && user.uid !== GUEST_ID) {
+      saveUserData(user.uid, { favorites: savedItems, history: scenarioHistory });
+    } else {
+      localStorage.setItem('nihongo_favorites', JSON.stringify(savedItems));
+      localStorage.setItem('nihongo_scenarios', JSON.stringify(scenarioHistory));
+    }
+  }, [savedItems, scenarioHistory, user, isSyncing]);
+
+  const handleGuestLogin = () => {
+    setUser(GUEST_USER);
+    setIsSyncing(false);
+  };
 
   const toggleSavedItem = (item: SavedItem) => {
     setSavedItems(prev => {
@@ -58,18 +105,15 @@ export default function App() {
     });
   };
 
-  // History Helpers
   const saveScenarioToHistory = (id: string, content: ScenarioContent) => {
     const timestamp = Date.now();
-    // Ensure content scenarioName matches ID for consistency in UI
     const contentWithTime = { ...content, scenarioName: id, timestamp };
     
     setScenarioHistory(prev => {
       const existingIndex = prev.findIndex(item => item.id === id);
       if (existingIndex >= 0) {
         const updated = [...prev];
-        // Add new version to the start of the array
-        const versions = [contentWithTime, ...updated[existingIndex].versions].slice(0, 5); // Keep last 5 max
+        const versions = [contentWithTime, ...updated[existingIndex].versions].slice(0, 5);
         updated[existingIndex] = {
           ...updated[existingIndex],
           versions,
@@ -98,27 +142,23 @@ export default function App() {
 
   const handleScenarioSelect = async (scenarioName: string) => {
     setLoadingScenarioName(scenarioName);
-    setCurrentScenarioId(scenarioName); // Set stable ID
+    setCurrentScenarioId(scenarioName);
     setErrorMsg(null);
 
-    // Check history first using the stable name/ID
     const existingHistory = scenarioHistory.find(h => h.id === scenarioName);
     
     if (existingHistory && existingHistory.versions.length > 0) {
-      // Load from history
       const latestVersion = existingHistory.versions[0];
       setCurrentVersions(existingHistory.versions);
-      setCurrentVersionIndex(0); // Default to latest
+      setCurrentVersionIndex(0);
       setCurrentContent(latestVersion);
       
-      // Update last accessed time without adding new version
       setScenarioHistory(prev => prev.map(item => 
         item.id === scenarioName ? { ...item, lastAccessed: Date.now() } : item
       ));
       
       setViewState(ViewState.STUDY);
     } else {
-      // Generate new
       setViewState(ViewState.GENERATING);
       try {
         const content = await generateScenarioContent(scenarioName, language);
@@ -137,10 +177,7 @@ export default function App() {
   };
 
   const handleRegenerate = async () => {
-    // Use stable ID (currentScenarioId) instead of currentContent.scenarioName
-    // to prevents history duplication if the AI changed the name previously
     const scenarioIdToUse = currentScenarioId; 
-    
     if (!scenarioIdToUse) return;
     
     setViewState(ViewState.GENERATING);
@@ -148,12 +185,7 @@ export default function App() {
     
     try {
       const content = await generateScenarioContent(scenarioIdToUse, language);
-      // Save using the stable ID
       const savedVersion = saveScenarioToHistory(scenarioIdToUse, content);
-      
-      // Update view local state
-      // Get fresh history to ensure we have correct versions
-      // (Though saveScenarioToHistory is async via setState, for immediate UI update we can manually construct)
       
       setCurrentVersions(prev => [savedVersion, ...prev]);
       setCurrentVersionIndex(0);
@@ -175,12 +207,11 @@ export default function App() {
   };
 
   const openHistoryItem = (item: ScenarioHistoryItem) => {
-    setCurrentScenarioId(item.id); // Set stable ID
+    setCurrentScenarioId(item.id);
     setCurrentVersions(item.versions);
     setCurrentVersionIndex(0);
     setCurrentContent(item.versions[0]);
     
-    // Update access time
     setScenarioHistory(prev => prev.map(h => 
       h.id === item.id ? { ...h, lastAccessed: Date.now() } : h
     ));
@@ -209,7 +240,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      {/* Navigation Bar */}
       <nav className="bg-white border-b border-slate-100 px-6 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
         <div 
           className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
@@ -236,6 +266,15 @@ export default function App() {
             <Globe className="w-4 h-4" />
             {language === 'zh' ? 'English' : '中文'}
           </button>
+
+          <div className="h-6 w-px bg-slate-200 mx-1"></div>
+          
+          <UserMenu 
+            user={user} 
+            isSyncing={isSyncing} 
+            language={language} 
+            onGuestLogin={handleGuestLogin}
+          />
         </div>
       </nav>
 
@@ -278,11 +317,6 @@ export default function App() {
               {t.constructingDesc} <br/>
               <span className="font-semibold text-indigo-600">"{loadingScenarioName}"</span>
             </p>
-            <div className="mt-8 flex gap-2">
-              <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-0"></span>
-              <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-100"></span>
-              <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-200"></span>
-            </div>
           </div>
         )}
 
