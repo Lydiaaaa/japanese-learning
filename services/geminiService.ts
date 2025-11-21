@@ -10,8 +10,8 @@ export const generateScenarioContent = async (scenario: string, language: Langua
   if (!API_KEY) throw new Error("API Key missing");
 
   const langInstruction = language === 'zh' 
-    ? "All 'meaning' and 'translation' fields MUST be in Simplified Chinese." 
-    : "All 'meaning' and 'translation' fields MUST be in English.";
+    ? "All 'meaning' and 'translation' fields MUST be in Simplified Chinese. The 'scenarioName' field MUST be exactly: " + scenario
+    : "All 'meaning' and 'translation' fields MUST be in English. The 'scenarioName' field MUST be exactly: " + scenario;
 
   // Increased counts as requested: Vocab 30-35, Expressions 15-20
   const prompt = `
@@ -85,7 +85,10 @@ export const generateScenarioContent = async (scenario: string, language: Langua
   });
 
   if (response.text) {
-    return JSON.parse(response.text) as ScenarioContent;
+    const result = JSON.parse(response.text) as ScenarioContent;
+    // FORCE the scenario name to match the requested input to prevent ID drift in history
+    result.scenarioName = scenario;
+    return result;
   }
   throw new Error("Failed to generate content");
 };

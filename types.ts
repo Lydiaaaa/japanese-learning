@@ -31,6 +31,7 @@ export interface ScenarioContent {
   vocabulary: VocabularyItem[];
   expressions: ExpressionItem[];
   dialogues: DialogueSection[];
+  timestamp?: number; // Added for versioning
 }
 
 export interface Category {
@@ -53,10 +54,18 @@ export interface SavedItem {
   timestamp: number;
 }
 
+export interface ScenarioHistoryItem {
+  id: string; // Scenario name acting as ID
+  name: string;
+  versions: ScenarioContent[];
+  lastAccessed: number;
+}
+
 export enum ViewState {
   HOME,
   GENERATING,
   STUDY,
   FAVORITES,
+  HISTORY,
   ERROR
 }

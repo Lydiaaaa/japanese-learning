@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { CATEGORIES, UI_TEXT } from '../constants';
-import { ArrowRight, Building, Plane, Utensils, Briefcase, Search } from 'lucide-react';
+import { ArrowRight, Building, Plane, Utensils, Briefcase, Search, History } from 'lucide-react';
 import { Language } from '../types';
 
 interface HomeProps {
   onScenarioSelect: (scenario: string) => void;
+  onViewHistory: () => void;
   language: Language;
 }
 
@@ -15,7 +16,7 @@ const iconMap: Record<string, React.ElementType> = {
   Briefcase
 };
 
-export const Home: React.FC<HomeProps> = ({ onScenarioSelect, language }) => {
+export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, language }) => {
   const [customInput, setCustomInput] = useState('');
   const t = UI_TEXT[language];
 
@@ -54,6 +55,16 @@ export const Home: React.FC<HomeProps> = ({ onScenarioSelect, language }) => {
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
+      </div>
+
+      <div className="flex justify-end mb-6">
+        <button 
+          onClick={onViewHistory}
+          className="text-slate-500 hover:text-indigo-600 text-sm font-medium flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white transition-all"
+        >
+          <History className="w-4 h-4" />
+          {t.history}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

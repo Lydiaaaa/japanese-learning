@@ -117,7 +117,14 @@ export const UI_TEXT = {
     stop: '停止',
     playMy: '回放',
     speaker: '说话人',
-    role: '角色'
+    role: '角色',
+    history: '我看过的场景',
+    noHistory: '暂无历史记录',
+    regenerate: '重新生成',
+    versions: '版本',
+    latest: '最新',
+    delete: '删除',
+    version: '版本'
   },
   en: {
     title: 'Nihongo Scene Master',
@@ -144,6 +151,13 @@ export const UI_TEXT = {
     stop: 'Stop',
     playMy: 'Play My Recording',
     speaker: 'Speaker',
-    role: 'Role'
+    role: 'Role',
+    history: 'My Scenarios',
+    noHistory: 'No history yet',
+    regenerate: 'Regenerate',
+    versions: 'Versions',
+    latest: 'Latest',
+    delete: 'Delete',
+    version: 'Version'
   }
 };

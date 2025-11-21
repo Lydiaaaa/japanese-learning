@@ -2,29 +2,51 @@ import React, { useState, useEffect } from 'react';
 import { Home } from './components/Home';
 import { StudyView } from './components/StudyView';
 import { FavoritesView } from './components/FavoritesView';
-import { ViewState, ScenarioContent, Language, SavedItem } from './types';
+import { ScenariosListView } from './components/ScenariosListView';
+import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem } from './types';
 import { generateScenarioContent } from './services/geminiService';
 import { Loader2, AlertCircle, RefreshCw, Globe, Star } from 'lucide-react';
 import { UI_TEXT } from './constants';
 
 export default function App() {
   const [viewState, setViewState] = useState<ViewState>(ViewState.HOME);
+  const [currentScenarioId, setCurrentScenarioId] = useState<string>(''); // Stable ID for the current scenario
   const [currentContent, setCurrentContent] = useState<ScenarioContent | null>(null);
+  const [currentVersions, setCurrentVersions] = useState<ScenarioContent[]>([]);
+  const [currentVersionIndex, setCurrentVersionIndex] = useState<number>(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [loadingScenario, setLoadingScenario] = useState<string>('');
+  const [loadingScenarioName, setLoadingScenarioName] = useState<string>('');
   
   // Global State
   const [language, setLanguage] = useState<Language>('zh');
+  
+  // Favorites State
   const [savedItems, setSavedItems] = useState<SavedItem[]>(() => {
-    const saved = localStorage.getItem('nihongo_favorites');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('nihongo_favorites');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
+  // History State
+  const [scenarioHistory, setScenarioHistory] = useState<ScenarioHistoryItem[]>(() => {
+    try {
+      const history = localStorage.getItem('nihongo_scenarios');
+      return history ? JSON.parse(history) : [];
+    } catch { return []; }
   });
 
   const t = UI_TEXT[language];
 
+  // Persist Favorites
   useEffect(() => {
     localStorage.setItem('nihongo_favorites', JSON.stringify(savedItems));
   }, [savedItems]);
+
+  // Persist History
+  useEffect(() => {
+    localStorage.setItem('nihongo_scenarios', JSON.stringify(scenarioHistory));
+  }, [scenarioHistory]);
 
   const toggleSavedItem = (item: SavedItem) => {
     setSavedItems(prev => {
@@ -36,30 +58,146 @@ export default function App() {
     });
   };
 
-  const handleScenarioSelect = async (scenario: string) => {
-    setViewState(ViewState.GENERATING);
-    setLoadingScenario(scenario);
+  // History Helpers
+  const saveScenarioToHistory = (id: string, content: ScenarioContent) => {
+    const timestamp = Date.now();
+    // Ensure content scenarioName matches ID for consistency in UI
+    const contentWithTime = { ...content, scenarioName: id, timestamp };
+    
+    setScenarioHistory(prev => {
+      const existingIndex = prev.findIndex(item => item.id === id);
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        // Add new version to the start of the array
+        const versions = [contentWithTime, ...updated[existingIndex].versions].slice(0, 5); // Keep last 5 max
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          versions,
+          lastAccessed: timestamp
+        };
+        return updated;
+      } else {
+        return [{
+          id: id,
+          name: id,
+          versions: [contentWithTime],
+          lastAccessed: timestamp
+        }, ...prev];
+      }
+    });
+    
+    return contentWithTime;
+  };
+
+  const deleteScenario = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm('Are you sure you want to delete this scenario history?')) {
+      setScenarioHistory(prev => prev.filter(item => item.id !== id));
+    }
+  };
+
+  const handleScenarioSelect = async (scenarioName: string) => {
+    setLoadingScenarioName(scenarioName);
+    setCurrentScenarioId(scenarioName); // Set stable ID
     setErrorMsg(null);
 
+    // Check history first using the stable name/ID
+    const existingHistory = scenarioHistory.find(h => h.id === scenarioName);
+    
+    if (existingHistory && existingHistory.versions.length > 0) {
+      // Load from history
+      const latestVersion = existingHistory.versions[0];
+      setCurrentVersions(existingHistory.versions);
+      setCurrentVersionIndex(0); // Default to latest
+      setCurrentContent(latestVersion);
+      
+      // Update last accessed time without adding new version
+      setScenarioHistory(prev => prev.map(item => 
+        item.id === scenarioName ? { ...item, lastAccessed: Date.now() } : item
+      ));
+      
+      setViewState(ViewState.STUDY);
+    } else {
+      // Generate new
+      setViewState(ViewState.GENERATING);
+      try {
+        const content = await generateScenarioContent(scenarioName, language);
+        const savedVersion = saveScenarioToHistory(scenarioName, content);
+        
+        setCurrentVersions([savedVersion]);
+        setCurrentVersionIndex(0);
+        setCurrentContent(savedVersion);
+        setViewState(ViewState.STUDY);
+      } catch (err) {
+        console.error(err);
+        setErrorMsg(t.errorDesc);
+        setViewState(ViewState.ERROR);
+      }
+    }
+  };
+
+  const handleRegenerate = async () => {
+    // Use stable ID (currentScenarioId) instead of currentContent.scenarioName
+    // to prevents history duplication if the AI changed the name previously
+    const scenarioIdToUse = currentScenarioId; 
+    
+    if (!scenarioIdToUse) return;
+    
+    setViewState(ViewState.GENERATING);
+    setLoadingScenarioName(scenarioIdToUse);
+    
     try {
-      const content = await generateScenarioContent(scenario, language);
-      setCurrentContent(content);
+      const content = await generateScenarioContent(scenarioIdToUse, language);
+      // Save using the stable ID
+      const savedVersion = saveScenarioToHistory(scenarioIdToUse, content);
+      
+      // Update view local state
+      // Get fresh history to ensure we have correct versions
+      // (Though saveScenarioToHistory is async via setState, for immediate UI update we can manually construct)
+      
+      setCurrentVersions(prev => [savedVersion, ...prev]);
+      setCurrentVersionIndex(0);
+      setCurrentContent(savedVersion);
+      
       setViewState(ViewState.STUDY);
     } catch (err) {
-      console.error(err);
-      setErrorMsg(t.errorDesc);
-      setViewState(ViewState.ERROR);
+       console.error(err);
+       setErrorMsg(t.errorDesc);
+       setViewState(ViewState.ERROR);
     }
+  };
+
+  const handleVersionSelect = (index: number) => {
+    if (index >= 0 && index < currentVersions.length) {
+      setCurrentVersionIndex(index);
+      setCurrentContent(currentVersions[index]);
+    }
+  };
+
+  const openHistoryItem = (item: ScenarioHistoryItem) => {
+    setCurrentScenarioId(item.id); // Set stable ID
+    setCurrentVersions(item.versions);
+    setCurrentVersionIndex(0);
+    setCurrentContent(item.versions[0]);
+    
+    // Update access time
+    setScenarioHistory(prev => prev.map(h => 
+      h.id === item.id ? { ...h, lastAccessed: Date.now() } : h
+    ));
+    
+    setViewState(ViewState.STUDY);
   };
 
   const handleBack = () => {
     setViewState(ViewState.HOME);
     setCurrentContent(null);
+    setCurrentVersions([]);
+    setCurrentScenarioId('');
   };
 
   const handleRetry = () => {
-    if (loadingScenario) {
-      handleScenarioSelect(loadingScenario);
+    if (loadingScenarioName) {
+      handleScenarioSelect(loadingScenarioName);
     } else {
       setViewState(ViewState.HOME);
     }
@@ -103,7 +241,11 @@ export default function App() {
 
       <main className="container mx-auto md:mt-6">
         {viewState === ViewState.HOME && (
-          <Home onScenarioSelect={handleScenarioSelect} language={language} />
+          <Home 
+            onScenarioSelect={handleScenarioSelect} 
+            onViewHistory={() => setViewState(ViewState.HISTORY)}
+            language={language} 
+          />
         )}
 
         {viewState === ViewState.FAVORITES && (
@@ -112,6 +254,16 @@ export default function App() {
             onBack={() => setViewState(ViewState.HOME)}
             language={language}
             onToggleSave={toggleSavedItem}
+          />
+        )}
+
+        {viewState === ViewState.HISTORY && (
+          <ScenariosListView
+            history={scenarioHistory}
+            onBack={() => setViewState(ViewState.HOME)}
+            onSelect={openHistoryItem}
+            onDelete={deleteScenario}
+            language={language}
           />
         )}
 
@@ -124,7 +276,7 @@ export default function App() {
             <h2 className="mt-8 text-2xl font-bold text-slate-800">{t.constructing}</h2>
             <p className="mt-2 text-slate-500 max-w-md">
               {t.constructingDesc} <br/>
-              <span className="font-semibold text-indigo-600">"{loadingScenario}"</span>
+              <span className="font-semibold text-indigo-600">"{loadingScenarioName}"</span>
             </p>
             <div className="mt-8 flex gap-2">
               <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-0"></span>
@@ -137,10 +289,14 @@ export default function App() {
         {viewState === ViewState.STUDY && currentContent && (
           <StudyView 
             content={currentContent} 
+            versions={currentVersions}
+            currentVersionIndex={currentVersionIndex}
             onBack={handleBack} 
             language={language}
             savedItems={savedItems}
             onToggleSave={toggleSavedItem}
+            onRegenerate={handleRegenerate}
+            onSelectVersion={handleVersionSelect}
           />
         )}
 
