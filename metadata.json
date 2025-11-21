@@ -1,0 +1,7 @@
+{
+  "name": "Nihongo Scene Master",
+  "description": "A scenario-based Japanese learning application generating vocabulary, expressions, and dialogues for specific real-life situations.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
