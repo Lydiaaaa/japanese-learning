@@ -13,12 +13,13 @@ export const generateScenarioContent = async (scenario: string, language: Langua
     ? "All 'meaning' and 'translation' fields MUST be in Simplified Chinese." 
     : "All 'meaning' and 'translation' fields MUST be in English.";
 
+  // Increased counts as requested: Vocab 30-35, Expressions 15-20
   const prompt = `
     Create a comprehensive Japanese language study guide for the specific scenario: "${scenario}".
     
     Requirements:
-    1. Vocabulary: 20-25 essential words specific to this scenario.
-    2. Expressions: 10-15 common useful phrases/sentence patterns (grammar points or set phrases).
+    1. Vocabulary: 30-35 essential words specific to this scenario.
+    2. Expressions: 15-20 common useful phrases/sentence patterns (grammar points or set phrases).
     3. Dialogues: Create a realistic conversation flow broken down into 3 distinct chronological sub-scenes (e.g., "Start", "Middle", "End" but named appropriately for the context).
     4. Language: ${langInstruction}
     
@@ -89,7 +90,19 @@ export const generateScenarioContent = async (scenario: string, language: Langua
   throw new Error("Failed to generate content");
 };
 
-export const generateSpeech = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck'): Promise<string> => {
+// Helper to decode base64 to Uint8Array
+function decodeBase64(base64: string) {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+// Plays TTS audio directly using AudioContext to handle raw PCM data
+export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck'): Promise<void> => {
   if (!API_KEY) throw new Error("API Key missing");
 
   const response = await ai.models.generateContent({
@@ -106,10 +119,39 @@ export const generateSpeech = async (text: string, voiceName: 'Puck' | 'Kore' = 
   });
 
   const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  
   if (!base64Audio) {
     throw new Error("No audio data generated");
   }
 
-  return `data:audio/mp3;base64,${base64Audio}`;
+  // Initialize AudioContext (standard or webkit)
+  const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+  const ctx = new AudioContext({ sampleRate: 24000 }); // TTS model uses 24kHz
+
+  const pcmBytes = decodeBase64(base64Audio);
+  
+  // Convert Int16 PCM to Float32
+  // Data from API is 16-bit integer PCM
+  const dataInt16 = new Int16Array(pcmBytes.buffer);
+  const float32Data = new Float32Array(dataInt16.length);
+  
+  for (let i = 0; i < dataInt16.length; i++) {
+    // Normalize to [-1.0, 1.0]
+    float32Data[i] = dataInt16[i] / 32768.0;
+  }
+
+  const buffer = ctx.createBuffer(1, float32Data.length, 24000);
+  buffer.copyToChannel(float32Data, 0);
+
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(ctx.destination);
+  source.start(0);
+
+  return new Promise((resolve) => {
+    source.onended = () => {
+      source.disconnect();
+      ctx.close(); 
+      resolve();
+    };
+  });
 };

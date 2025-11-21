@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { VocabularyItem, ExpressionItem, SavedItem } from '../types';
 import { Volume2, Star } from 'lucide-react';
-import { generateSpeech } from '../services/geminiService';
+import { playTTS } from '../services/geminiService';
 
 interface Props {
   items: (VocabularyItem | ExpressionItem)[];
@@ -16,14 +16,12 @@ export const VocabularyList: React.FC<Props> = ({ items, type, savedItems, onTog
   const handlePlay = async (text: string, index: number) => {
     if (playingIndex === index) return;
     
+    setPlayingIndex(index);
     try {
-      setPlayingIndex(index);
-      const audioUrl = await generateSpeech(text);
-      const audio = new Audio(audioUrl);
-      audio.onended = () => setPlayingIndex(null);
-      audio.play();
+      await playTTS(text);
     } catch (err) {
       console.error("TTS Error", err);
+    } finally {
       setPlayingIndex(null);
     }
   };

@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { DialogueSection, Language } from '../types';
 import { Play, Pause, Mic, Volume2, ChevronDown, ChevronUp } from 'lucide-react';
-import { generateSpeech } from '../services/geminiService';
+import { playTTS } from '../services/geminiService';
 import { UI_TEXT } from '../constants';
 
 interface Props {
@@ -17,32 +17,22 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language }) => {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const t = UI_TEXT[language];
 
   // Play AI Audio
   const handlePlayLine = async (sectionIdx: number, lineIdx: number, text: string, speaker: string) => {
     if (playingLine?.sectionIdx === sectionIdx && playingLine?.lineIdx === lineIdx) {
-        // Stop if currently playing this line
-        if (audioRef.current) {
-            audioRef.current.pause();
-            setPlayingLine(null);
-        }
+        // Already playing, do nothing or simple ignore as we can't easily stop the promise based one-off audio context without complex logic
         return;
     }
 
+    setPlayingLine({ sectionIdx, lineIdx });
     try {
-      setPlayingLine({ sectionIdx, lineIdx });
       const voice = speaker === 'A' ? 'Puck' : 'Kore'; // Differentiate speakers
-      const audioUrl = await generateSpeech(text, voice);
-      
-      if (audioRef.current) {
-        audioRef.current.src = audioUrl;
-        audioRef.current.play();
-        audioRef.current.onended = () => setPlayingLine(null);
-      }
+      await playTTS(text, voice);
     } catch (error) {
       console.error("Audio Playback Error", error);
+    } finally {
       setPlayingLine(null);
     }
   };
@@ -93,7 +83,6 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language }) => {
 
   return (
     <div className="space-y-4">
-      <audio ref={audioRef} className="hidden" />
       
       {sections.map((section, sIdx) => {
         const isOpen = activeSection === sIdx;
