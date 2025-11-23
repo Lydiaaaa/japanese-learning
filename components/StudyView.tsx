@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { ScenarioContent, Language, SavedItem, VocabularyItem, ExpressionItem } from '../types';
-import { BookOpen, MessageCircle, GraduationCap, ChevronLeft, RotateCw, Clock } from 'lucide-react';
+import React, { useState } from 'react';
+import { ScenarioContent, Language, SavedItem } from '../types';
+import { BookOpen, MessageCircle, GraduationCap, ChevronLeft, RotateCw, Clock, Download } from 'lucide-react';
 import { VocabularyList } from './VocabularyList';
 import { DialoguePlayer } from './DialoguePlayer';
 import { UI_TEXT } from '../constants';
@@ -43,6 +43,145 @@ export const StudyView: React.FC<StudyViewProps> = ({
     });
   };
 
+  const handleDownloadPDF = () => {
+    // Generate a clean HTML string for the print window
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${content.scenarioName} - Study Guide</title>
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+        <style>
+          body { 
+            font-family: 'Noto Sans JP', sans-serif; 
+            color: #1a202c; 
+            line-height: 1.6;
+            padding: 40px; 
+            max-width: 800px; 
+            margin: 0 auto; 
+          }
+          h1 { 
+            font-size: 24px; 
+            border-bottom: 2px solid #1a202c; 
+            padding-bottom: 16px; 
+            margin-bottom: 32px; 
+          }
+          h2 { 
+            font-size: 18px; 
+            font-weight: 700; 
+            margin-top: 32px; 
+            margin-bottom: 16px; 
+            background: #f1f5f9; 
+            padding: 8px 12px; 
+            border-radius: 4px; 
+            -webkit-print-color-adjust: exact; 
+            print-color-adjust: exact;
+          }
+          .section { margin-bottom: 24px; }
+          
+          /* Vocab Grid */
+          .vocab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+          @media (max-width: 600px) { .vocab-grid { grid-template-columns: 1fr; } }
+          
+          .item { page-break-inside: avoid; margin-bottom: 12px; }
+          .vocab-term { font-weight: 700; font-size: 16px; }
+          .vocab-kana { color: #4f46e5; font-size: 14px; margin-left: 8px; }
+          .vocab-meaning { color: #4b5563; font-size: 14px; display: block; }
+          .vocab-type { font-size: 10px; color: #94a3b8; text-transform: uppercase; border: 1px solid #e2e8f0; padding: 1px 4px; border-radius: 4px; margin-left: 6px; }
+
+          /* Expressions */
+          .expr-item { margin-bottom: 16px; page-break-inside: avoid; border-bottom: 1px dashed #e2e8f0; padding-bottom: 8px; }
+          .expr-phrase { font-weight: 700; font-size: 16px; }
+          .expr-meaning { color: #4b5563; }
+          .expr-nuance { color: #4f46e5; font-size: 12px; font-style: italic; }
+
+          /* Dialogue */
+          .dialogue-section-title { font-weight: 700; margin-top: 24px; margin-bottom: 12px; font-size: 15px; text-decoration: underline; color: #334155; }
+          .dialogue-line { margin-bottom: 16px; display: flex; gap: 16px; page-break-inside: avoid; }
+          .speaker-label { font-weight: 700; min-width: 60px; font-size: 13px; color: #64748b; text-transform: uppercase; padding-top: 3px; }
+          .line-content { flex: 1; }
+          .jp-text { font-weight: 500; font-size: 15px; margin-bottom: 2px; }
+          .trans-text { color: #64748b; font-size: 13px; }
+
+          @media print {
+            body { padding: 0; }
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1>${content.scenarioName}</h1>
+        
+        <div class="section">
+          <h2>${t.vocab}</h2>
+          <div class="vocab-grid">
+            ${content.vocabulary.map(v => `
+              <div class="item">
+                <div>
+                  <span class="vocab-term">${v.term}</span>
+                  <span class="vocab-kana">${v.kana}</span>
+                  ${v.type ? `<span class="vocab-type">${v.type}</span>` : ''}
+                </div>
+                <span class="vocab-meaning">${v.meaning}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>${t.expressions}</h2>
+          ${content.expressions.map(e => `
+            <div class="expr-item">
+              <div class="expr-phrase">${e.phrase}</div>
+              <div>
+                <span class="expr-meaning">${e.meaning}</span>
+                ${e.nuance ? `<span class="expr-nuance">(${e.nuance})</span>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="section">
+          <h2>${t.dialogue}</h2>
+          ${content.dialogues.map(d => `
+            <div class="dialogue-section-title">${d.title}</div>
+            ${d.lines.map(l => `
+              <div class="dialogue-line">
+                <div class="speaker-label">${l.roleName || l.speaker}</div>
+                <div class="line-content">
+                  <div class="jp-text">${l.japanese}</div>
+                  <div class="trans-text">${l.translation}</div>
+                </div>
+              </div>
+            `).join('')}
+          `).join('')}
+        </div>
+
+        <div style="margin-top: 40px; font-size: 12px; color: #cbd5e1; text-align: center; border-top: 1px solid #f1f5f9; pt: 10px;">
+          Generated by Nihongo Scene Master
+        </div>
+
+        <script>
+          window.onload = () => {
+             // Delay slightly to ensure fonts are rendered
+             setTimeout(() => {
+                window.print();
+             }, 500);
+          }
+        </script>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+    } else {
+      alert("Please allow popups for this site to download the PDF.");
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto h-[calc(100vh-2rem)] flex flex-col">
       {/* Header */}
@@ -61,8 +200,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
             </div>
           </div>
           
-          {/* Action Area: Version Select and Regenerate */}
-          <div className="flex items-center gap-2 ml-12 md:ml-0">
+          {/* Action Area */}
+          <div className="flex items-center gap-2 ml-12 md:ml-0 flex-wrap">
              {versions.length > 1 && (
                <div className="relative group">
                  <select 
@@ -86,6 +225,15 @@ export const StudyView: React.FC<StudyViewProps> = ({
              >
                <RotateCw className="w-4 h-4" />
                <span className="hidden sm:inline">{t.regenerate}</span>
+             </button>
+
+             <button
+               onClick={handleDownloadPDF}
+               className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-900 transition-colors shadow-sm"
+               title="Print to PDF"
+             >
+               <Download className="w-4 h-4" />
+               <span className="hidden sm:inline">{t.download}</span>
              </button>
           </div>
         </div>

@@ -128,7 +128,9 @@ export const UI_TEXT = {
     login: '登录',
     logout: '退出登录',
     syncing: '同步中...',
-    guest: '访客'
+    guest: '访客',
+    download: '下载 PDF',
+    generatingPDF: '正在生成...'
   },
   en: {
     title: 'Nihongo Scene Master',
@@ -166,6 +168,8 @@ export const UI_TEXT = {
     login: 'Log In',
     logout: 'Log Out',
     syncing: 'Syncing...',
-    guest: 'Guest'
+    guest: 'Guest',
+    download: 'Download PDF',
+    generatingPDF: 'Generating...'
   }
 };
