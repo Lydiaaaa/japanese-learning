@@ -100,7 +100,6 @@ export const loginWithGoogle = async () => {
     if (error?.code === 'auth/operation-not-supported-in-this-environment') {
        alert("登录失败：当前环境不支持（可能是非 HTTPS 或在受限的预览窗口中）。请尝试在标准浏览器窗口中使用 http://localhost 打开。");
     } else if (error?.code === 'auth/unauthorized-domain') {
-       const currentDomain = window.location.hostname || window.location.host;
        alert(
          `登录失败：域名未授权。\n\n` +
          `可能原因：您使用的 Firebase 配置属于示例项目，您没有权限添加白名单。\n` +

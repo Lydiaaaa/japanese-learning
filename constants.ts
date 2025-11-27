@@ -1,4 +1,4 @@
-import { Category, Language } from './types';
+import { Category } from './types';
 
 export const CATEGORIES: Category[] = [
   {
