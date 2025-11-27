@@ -72,7 +72,7 @@ export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, lan
         <p className="text-slate-500 text-lg">{t.subtitle}</p>
       </header>
 
-      {/* Custom Input Hero */}
+      {/* Custom Input Hero - UPDATED UI: Light gray background, no border */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-10">
         <label className="block text-sm font-medium text-slate-700 mb-2">
           {t.customLabel}
@@ -83,7 +83,7 @@ export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, lan
             value={customInput}
             onChange={(e) => setCustomInput(e.target.value)}
             placeholder={t.customPlaceholder}
-            className="flex-1 p-4 rounded-xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none transition-all placeholder:text-slate-400"
+            className="flex-1 p-4 rounded-xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-200 outline-none transition-all placeholder:text-slate-400 text-slate-700"
           />
           <button
             type="submit"

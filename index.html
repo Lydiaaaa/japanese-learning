@@ -10,7 +10,7 @@
         theme: {
           extend: {
             colors: {
-              // Override the default indigo palette with the brand blue #1996de
+              // Override the default indigo palette with the new Brand Blue #1996de
               indigo: {
                 50: '#f0f9ff',
                 100: '#e0f2fe',
@@ -55,12 +55,16 @@
     "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js",
     "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js",
     "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js",
-    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/"
+    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "vite": "https://aistudiocdn.com/vite@^7.2.4"
   }
 }
 </script>
 </head>
   <body>
     <div id="root"></div>
+    <!-- Crucial for local development (Vite) -->
+    <script type="module" src="./index.tsx"></script>
   </body>
 </html>
