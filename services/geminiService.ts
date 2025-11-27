@@ -1,11 +1,28 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ScenarioContent, Language } from "../types";
 
+// Helper to safely get the API Key in both Vite (production) and AI Studio (preview) environments
+const getApiKey = () => {
+  // @ts-ignore - Vite environment
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
+    // @ts-ignore
+    return import.meta.env.VITE_API_KEY;
+  }
+  // Fallback for AI Studio or Node environment
+  return process.env.API_KEY;
+};
+
+const apiKey = getApiKey();
+if (!apiKey) {
+  console.error("API Key is missing! Please check your .env configuration.");
+}
+
 // Initialize Gemini directly
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
 export const generateScenarioContent = async (scenario: string, language: Language = 'zh'): Promise<ScenarioContent> => {
-  if (!process.env.API_KEY) throw new Error("API Key missing");
+  const currentKey = getApiKey();
+  if (!currentKey) throw new Error("API Key missing");
 
   const langInstruction = language === 'zh' 
     ? "All 'meaning' and 'translation' fields MUST be in Simplified Chinese. The 'scenarioName' field MUST be exactly: " + scenario
@@ -104,7 +121,8 @@ function decodeBase64(base64: string) {
 
 // Plays TTS audio directly using AudioContext to handle raw PCM data
 export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck'): Promise<void> => {
-  if (!process.env.API_KEY) throw new Error("API Key missing");
+  const currentKey = getApiKey();
+  if (!currentKey) throw new Error("API Key missing");
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
