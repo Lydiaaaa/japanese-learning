@@ -20,8 +20,46 @@ if (!apiKey) {
 // Initialize Gemini directly
 const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
-// Singleton AudioContext to prevent cold-start latency on every click
+// ---------------------------------------------------------------------------
+// AUDIO SYSTEM OPTIMIZATIONS
+// ---------------------------------------------------------------------------
+
+// 1. Singleton AudioContext (prevents cold-start latency)
 let audioContext: AudioContext | null = null;
+
+// 2. In-Memory Audio Cache (key: "VoiceName-Text" -> AudioBuffer)
+// This ensures 0ms latency for any repeated playback (especially vocabulary).
+const audioCache = new Map<string, AudioBuffer>();
+
+function getAudioContext(): AudioContext {
+  if (!audioContext) {
+    const AudioContextStr = window.AudioContext || (window as any).webkitAudioContext;
+    // Gemini TTS is 24kHz
+    audioContext = new AudioContextStr({ sampleRate: 24000 });
+  }
+  // Always resume if suspended (browser autoplay policy)
+  if (audioContext.state === 'suspended') {
+    audioContext.resume();
+  }
+  return audioContext;
+}
+
+// Helper: Convert Base64 PCM (Int16) to Float32Audio
+function processAudioChunk(base64: string): Float32Array {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  const dataInt16 = new Int16Array(bytes.buffer);
+  const float32Data = new Float32Array(dataInt16.length);
+  for (let i = 0; i < dataInt16.length; i++) {
+    // Normalize Int16 to Float32 [-1.0, 1.0]
+    float32Data[i] = dataInt16[i] / 32768.0;
+  }
+  return float32Data;
+}
 
 export const generateScenarioContent = async (scenario: string, language: Language = 'zh'): Promise<ScenarioContent> => {
   const currentKey = getApiKey();
@@ -111,78 +149,84 @@ export const generateScenarioContent = async (scenario: string, language: Langua
   throw new Error("Failed to generate content");
 };
 
-// Helper to decode base64 to Uint8Array
-function decodeBase64(base64: string) {
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
-
-// Optimized Play TTS using Streaming and Singleton AudioContext
+// Optimized Play TTS using Streaming + Caching
 export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck'): Promise<void> => {
   const currentKey = getApiKey();
   if (!currentKey) throw new Error("API Key missing");
 
-  // Initialize AudioContext singleton if needed
-  if (!audioContext) {
-    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-    // TTS model uses 24kHz
-    audioContext = new AudioContext({ sampleRate: 24000 });
+  const ctx = getAudioContext();
+  const cacheKey = `${voiceName}-${text}`;
+
+  // 1. HIT CACHE? Play immediately with Zero Latency.
+  if (audioCache.has(cacheKey)) {
+    const buffer = audioCache.get(cacheKey)!;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start();
+    return;
   }
 
-  // Ensure context is running (browsers may suspend it)
-  if (audioContext.state === 'suspended') {
-    await audioContext.resume();
-  }
-
-  // Use generateContentStream for low latency
-  const stream = await ai.models.generateContentStream({
-    model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text }] }],
-    config: {
-      responseModalities: [Modality.AUDIO],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: { voiceName }
+  // 2. MISS CACHE? Stream from API.
+  try {
+    const stream = await ai.models.generateContentStream({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName }
+          },
         },
       },
-    },
-  });
+    });
 
-  let nextStartTime = audioContext.currentTime;
+    let nextStartTime = ctx.currentTime;
+    // We collect all chunks to build a cache entry after playback
+    const collectedChunks: Float32Array[] = [];
+    let totalLength = 0;
 
-  for await (const chunk of stream) {
-    const base64Audio = chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    
-    if (base64Audio) {
-      const pcmBytes = decodeBase64(base64Audio);
+    for await (const chunk of stream) {
+      const base64Audio = chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       
-      // Convert Int16 PCM to Float32
-      const dataInt16 = new Int16Array(pcmBytes.buffer);
-      const float32Data = new Float32Array(dataInt16.length);
-      
-      for (let i = 0; i < dataInt16.length; i++) {
-        // Normalize to [-1.0, 1.0]
-        float32Data[i] = dataInt16[i] / 32768.0;
+      if (base64Audio) {
+        const float32Data = processAudioChunk(base64Audio);
+        
+        // A. Store for Cache
+        collectedChunks.push(float32Data);
+        totalLength += float32Data.length;
+
+        // B. Play Immediately (Gapless)
+        const buffer = ctx.createBuffer(1, float32Data.length, 24000);
+        buffer.copyToChannel(float32Data, 0);
+
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+
+        // Schedule playback: max(now, end of previous chunk)
+        const startAt = Math.max(ctx.currentTime, nextStartTime);
+        source.start(startAt);
+        
+        nextStartTime = startAt + buffer.duration;
       }
-
-      const buffer = audioContext.createBuffer(1, float32Data.length, 24000);
-      buffer.copyToChannel(float32Data, 0);
-
-      const source = audioContext.createBufferSource();
-      source.buffer = buffer;
-      source.connect(audioContext.destination);
-
-      // Schedule for gapless playback
-      // If nextStartTime is in the past (due to network latency), play immediately
-      const startAt = Math.max(audioContext.currentTime, nextStartTime);
-      source.start(startAt);
-      
-      nextStartTime = startAt + buffer.duration;
     }
+
+    // 3. BUILD CACHE (Construct full buffer for next time)
+    if (totalLength > 0) {
+      const fullBuffer = ctx.createBuffer(1, totalLength, 24000);
+      const channelData = fullBuffer.getChannelData(0);
+      let offset = 0;
+      for (const chunk of collectedChunks) {
+        channelData.set(chunk, offset);
+        offset += chunk.length;
+      }
+      audioCache.set(cacheKey, fullBuffer);
+    }
+
+  } catch (err) {
+    console.error("TTS Streaming Error:", err);
+    throw err;
   }
 };
