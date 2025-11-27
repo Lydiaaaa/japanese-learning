@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CATEGORIES, UI_TEXT } from '../constants';
-import { ArrowRight, Building, Plane, Utensils, Briefcase, Search, History } from 'lucide-react';
+import { ArrowRight, Building, Plane, Utensils, Briefcase, Search, History, RefreshCw } from 'lucide-react';
 import { Language } from '../types';
 
 interface HomeProps {
@@ -18,13 +18,52 @@ const iconMap: Record<string, React.ElementType> = {
 
 export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, language }) => {
   const [customInput, setCustomInput] = useState('');
+  // State to track which presets are currently visible for each category
+  const [visiblePresets, setVisiblePresets] = useState<Record<string, string[]>>({});
+  
   const t = UI_TEXT[language];
+
+  // Initialize or Reset presets when language changes.
+  // Requirement: Default to the FIRST 4 scenarios on load/language switch.
+  useEffect(() => {
+    const defaults: Record<string, string[]> = {};
+    CATEGORIES.forEach(cat => {
+      defaults[cat.id] = cat.presets[language].slice(0, 4);
+    });
+    setVisiblePresets(defaults);
+  }, [language]);
 
   const handleCustomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (customInput.trim()) {
       onScenarioSelect(customInput.trim());
     }
+  };
+
+  const handleShuffle = (catId: string) => {
+    const category = CATEGORIES.find(c => c.id === catId);
+    if (!category) return;
+
+    const allPresets = category.presets[language];
+    const currentShown = visiblePresets[catId] || [];
+    
+    // Algorithm: Try to pick items that are NOT currently shown to ensure variety
+    // Filter out items that are currently visible
+    const availablePool = allPresets.filter(p => !currentShown.includes(p));
+    
+    // If pool is too small (shouldn't happen with 12 items), fallback to full list
+    const sourcePool = availablePool.length >= 4 ? availablePool : allPresets;
+    
+    // Shuffle the source pool
+    const shuffled = [...sourcePool].sort(() => 0.5 - Math.random());
+    
+    // Take the top 4
+    const newSelection = shuffled.slice(0, 4);
+    
+    setVisiblePresets(prev => ({
+      ...prev,
+      [catId]: newSelection
+    }));
   };
 
   return (
@@ -70,25 +109,45 @@ export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, lan
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {CATEGORIES.map((cat) => {
           const Icon = iconMap[cat.icon] || Search;
+          const currentItems = visiblePresets[cat.id] || [];
+
           return (
             <div key={cat.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow">
-              <div className="p-5 border-b border-slate-50 flex items-center gap-3 bg-slate-50/50">
-                <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
-                  <Icon className="w-5 h-5" />
+              <div className="p-5 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <h2 className="font-bold text-slate-800">{cat.name[language]}</h2>
                 </div>
-                <h2 className="font-bold text-slate-800">{cat.name[language]}</h2>
+                
+                {/* Shuffle Button */}
+                <button 
+                  onClick={() => handleShuffle(cat.id)}
+                  className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-indigo-600 px-2 py-1 rounded hover:bg-white transition-all"
+                  title={t.shuffle}
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  {t.shuffle}
+                </button>
               </div>
+              
               <div className="p-2">
-                {cat.presets[language].map((preset, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => onScenarioSelect(preset)}
-                    className="w-full text-left px-4 py-3 rounded-lg hover:bg-slate-50 text-slate-600 hover:text-indigo-600 text-sm transition-colors flex items-center justify-between group"
-                  >
-                    {preset}
-                    <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </button>
-                ))}
+                {currentItems.length > 0 ? (
+                  currentItems.map((preset, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => onScenarioSelect(preset)}
+                      className="w-full text-left px-4 py-3 rounded-lg hover:bg-slate-50 text-slate-600 hover:text-indigo-600 text-sm transition-colors flex items-center justify-between group"
+                    >
+                      {preset}
+                      <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  ))
+                ) : (
+                  // Fallback loader if state hasn't hydrated yet
+                  <div className="p-4 text-center text-slate-300 text-sm">Loading...</div>
+                )}
               </div>
             </div>
           );
