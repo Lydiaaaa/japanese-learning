@@ -24,7 +24,6 @@ export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, lan
   const t = UI_TEXT[language];
 
   // Initialize or Reset presets when language changes.
-  // Requirement: Default to the FIRST 4 scenarios on load/language switch.
   useEffect(() => {
     const defaults: Record<string, string[]> = {};
     CATEGORIES.forEach(cat => {
@@ -84,11 +83,11 @@ export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, lan
             value={customInput}
             onChange={(e) => setCustomInput(e.target.value)}
             placeholder={t.customPlaceholder}
-            className="flex-1 p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+            className="flex-1 p-4 rounded-xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none transition-all placeholder:text-slate-400"
           />
           <button
             type="submit"
-            className="bg-indigo-600 text-white px-6 py-4 rounded-xl font-medium hover:bg-indigo-700 transition-colors flex items-center gap-2 whitespace-nowrap"
+            className="bg-indigo-600 text-white px-6 py-4 rounded-xl font-medium hover:bg-indigo-700 transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm shadow-indigo-200"
           >
             {t.start}
             <ArrowRight className="w-4 h-4" />
@@ -115,7 +114,7 @@ export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, lan
             <div key={cat.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow">
               <div className="p-5 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
                     <Icon className="w-5 h-5" />
                   </div>
                   <h2 className="font-bold text-slate-800">{cat.name[language]}</h2>
@@ -145,7 +144,7 @@ export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, lan
                     </button>
                   ))
                 ) : (
-                  // Fallback loader if state hasn't hydrated yet
+                  // Fallback loader
                   <div className="p-4 text-center text-slate-300 text-sm">Loading...</div>
                 )}
               </div>

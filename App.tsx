@@ -6,7 +6,7 @@ import { ScenariosListView } from './components/ScenariosListView';
 import { UserMenu } from './components/UserMenu';
 import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem } from './types';
 import { generateScenarioContent } from './services/geminiService';
-import { subscribeToAuth, syncUserData, saveUserData, GUEST_USER, GUEST_ID } from './services/firebase';
+import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID } from './services/firebase';
 import { Loader2, AlertCircle, RefreshCw, Globe, Star } from 'lucide-react';
 import { UI_TEXT } from './constants';
 import { User } from 'firebase/auth';
@@ -89,11 +89,6 @@ export default function App() {
       localStorage.setItem('nihongo_scenarios', JSON.stringify(scenarioHistory));
     }
   }, [savedItems, scenarioHistory, user, isSyncing]);
-
-  const handleGuestLogin = () => {
-    setUser(GUEST_USER);
-    setIsSyncing(false);
-  };
 
   const toggleSavedItem = (item: SavedItem) => {
     setSavedItems(prev => {
@@ -273,7 +268,6 @@ export default function App() {
             user={user} 
             isSyncing={isSyncing} 
             language={language} 
-            onGuestLogin={handleGuestLogin}
           />
         </div>
       </nav>
