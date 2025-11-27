@@ -20,6 +20,9 @@ if (!apiKey) {
 // Initialize Gemini directly
 const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
+// Singleton AudioContext to prevent cold-start latency on every click
+let audioContext: AudioContext | null = null;
+
 export const generateScenarioContent = async (scenario: string, language: Language = 'zh'): Promise<ScenarioContent> => {
   const currentKey = getApiKey();
   if (!currentKey) throw new Error("API Key missing");
@@ -119,12 +122,25 @@ function decodeBase64(base64: string) {
   return bytes;
 }
 
-// Plays TTS audio directly using AudioContext to handle raw PCM data
+// Optimized Play TTS using Streaming and Singleton AudioContext
 export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck'): Promise<void> => {
   const currentKey = getApiKey();
   if (!currentKey) throw new Error("API Key missing");
 
-  const response = await ai.models.generateContent({
+  // Initialize AudioContext singleton if needed
+  if (!audioContext) {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    // TTS model uses 24kHz
+    audioContext = new AudioContext({ sampleRate: 24000 });
+  }
+
+  // Ensure context is running (browsers may suspend it)
+  if (audioContext.state === 'suspended') {
+    await audioContext.resume();
+  }
+
+  // Use generateContentStream for low latency
+  const stream = await ai.models.generateContentStream({
     model: "gemini-2.5-flash-preview-tts",
     contents: [{ parts: [{ text }] }],
     config: {
@@ -137,40 +153,36 @@ export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck')
     },
   });
 
-  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  if (!base64Audio) {
-    throw new Error("No audio data generated");
+  let nextStartTime = audioContext.currentTime;
+
+  for await (const chunk of stream) {
+    const base64Audio = chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    
+    if (base64Audio) {
+      const pcmBytes = decodeBase64(base64Audio);
+      
+      // Convert Int16 PCM to Float32
+      const dataInt16 = new Int16Array(pcmBytes.buffer);
+      const float32Data = new Float32Array(dataInt16.length);
+      
+      for (let i = 0; i < dataInt16.length; i++) {
+        // Normalize to [-1.0, 1.0]
+        float32Data[i] = dataInt16[i] / 32768.0;
+      }
+
+      const buffer = audioContext.createBuffer(1, float32Data.length, 24000);
+      buffer.copyToChannel(float32Data, 0);
+
+      const source = audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioContext.destination);
+
+      // Schedule for gapless playback
+      // If nextStartTime is in the past (due to network latency), play immediately
+      const startAt = Math.max(audioContext.currentTime, nextStartTime);
+      source.start(startAt);
+      
+      nextStartTime = startAt + buffer.duration;
+    }
   }
-
-  // Initialize AudioContext (standard or webkit)
-  const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-  const ctx = new AudioContext({ sampleRate: 24000 }); // TTS model uses 24kHz
-
-  const pcmBytes = decodeBase64(base64Audio);
-  
-  // Convert Int16 PCM to Float32
-  // Data from API is 16-bit integer PCM
-  const dataInt16 = new Int16Array(pcmBytes.buffer);
-  const float32Data = new Float32Array(dataInt16.length);
-  
-  for (let i = 0; i < dataInt16.length; i++) {
-    // Normalize to [-1.0, 1.0]
-    float32Data[i] = dataInt16[i] / 32768.0;
-  }
-
-  const buffer = ctx.createBuffer(1, float32Data.length, 24000);
-  buffer.copyToChannel(float32Data, 0);
-
-  const source = ctx.createBufferSource();
-  source.buffer = buffer;
-  source.connect(ctx.destination);
-  source.start(0);
-
-  return new Promise((resolve) => {
-    source.onended = () => {
-      source.disconnect();
-      ctx.close(); 
-      resolve();
-    };
-  });
 };
