@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { SavedItem, Language, VocabularyItem, ExpressionItem } from '../types';
+import { SavedItem, Language, VocabularyItem, ExpressionItem, Notation } from '../types';
 import { VocabularyList } from './VocabularyList';
 import { ChevronLeft, Star } from 'lucide-react';
 import { UI_TEXT } from '../constants';
@@ -9,9 +10,10 @@ interface FavoritesViewProps {
   onBack: () => void;
   language: Language;
   onToggleSave: (item: SavedItem) => void;
+  notation: Notation;
 }
 
-export const FavoritesView: React.FC<FavoritesViewProps> = ({ savedItems, onBack, language, onToggleSave }) => {
+export const FavoritesView: React.FC<FavoritesViewProps> = ({ savedItems, onBack, language, onToggleSave, notation }) => {
   const t = UI_TEXT[language];
 
   // Separate items for cleaner rendering if needed, though VocabularyList handles arrays
@@ -50,13 +52,13 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ savedItems, onBack
             {vocabItems.length > 0 && (
               <div>
                 <h2 className="text-lg font-bold text-slate-700 px-4 mb-4">{t.vocab}</h2>
-                <VocabularyList items={vocabItems} type="vocab" savedItems={savedItems} onToggleSave={onToggleSave} />
+                <VocabularyList items={vocabItems} type="vocab" savedItems={savedItems} onToggleSave={onToggleSave} notation={notation} />
               </div>
             )}
             {exprItems.length > 0 && (
               <div>
                 <h2 className="text-lg font-bold text-slate-700 px-4 mb-4">{t.expressions}</h2>
-                <VocabularyList items={exprItems} type="expression" savedItems={savedItems} onToggleSave={onToggleSave} />
+                <VocabularyList items={exprItems} type="expression" savedItems={savedItems} onToggleSave={onToggleSave} notation={notation} />
               </div>
             )}
           </div>

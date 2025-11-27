@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { ScenarioContent, Language, SavedItem } from '../types';
+import { ScenarioContent, Language, SavedItem, Notation } from '../types';
 import { BookOpen, MessageCircle, GraduationCap, ChevronLeft, RotateCw, Clock, Download } from 'lucide-react';
 import { VocabularyList } from './VocabularyList';
 import { DialoguePlayer } from './DialoguePlayer';
@@ -15,6 +16,7 @@ interface StudyViewProps {
   onToggleSave: (item: SavedItem) => void;
   onRegenerate: () => void;
   onSelectVersion: (index: number) => void;
+  notation: Notation;
 }
 
 type Tab = 'vocab' | 'expressions' | 'dialogue';
@@ -28,7 +30,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
   savedItems, 
   onToggleSave,
   onRegenerate,
-  onSelectVersion
+  onSelectVersion,
+  notation
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('vocab');
   const t = UI_TEXT[language];
@@ -44,7 +47,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
   };
 
   const handleDownloadPDF = () => {
-    // Generate a clean HTML string for the print window
     const printContent = `
       <!DOCTYPE html>
       <html>
@@ -85,15 +87,15 @@ export const StudyView: React.FC<StudyViewProps> = ({
           
           .item { page-break-inside: avoid; margin-bottom: 12px; }
           .vocab-term { font-weight: 700; font-size: 16px; }
-          .vocab-kana { color: #4f46e5; font-size: 14px; margin-left: 8px; }
+          .vocab-reading { color: #4f46e5; font-size: 14px; margin-left: 8px; }
           .vocab-meaning { color: #4b5563; font-size: 14px; display: block; }
           .vocab-type { font-size: 10px; color: #94a3b8; text-transform: uppercase; border: 1px solid #e2e8f0; padding: 1px 4px; border-radius: 4px; margin-left: 6px; }
 
           /* Expressions */
           .expr-item { margin-bottom: 16px; page-break-inside: avoid; border-bottom: 1px dashed #e2e8f0; padding-bottom: 8px; }
           .expr-phrase { font-weight: 700; font-size: 16px; }
+          .expr-reading { color: #4f46e5; font-size: 13px; display: block; margin-bottom: 2px; }
           .expr-meaning { color: #4b5563; }
-          .expr-nuance { color: #4f46e5; font-size: 12px; font-style: italic; }
 
           /* Dialogue */
           .dialogue-section-title { font-weight: 700; margin-top: 24px; margin-bottom: 12px; font-size: 15px; text-decoration: underline; color: #334155; }
@@ -101,6 +103,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
           .speaker-label { font-weight: 700; min-width: 60px; font-size: 13px; color: #64748b; text-transform: uppercase; padding-top: 3px; }
           .line-content { flex: 1; }
           .jp-text { font-weight: 500; font-size: 15px; margin-bottom: 2px; }
+          .reading-text { color: #4f46e5; font-size: 12px; margin-bottom: 2px; }
           .trans-text { color: #64748b; font-size: 13px; }
 
           @media print {
@@ -119,7 +122,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
               <div class="item">
                 <div>
                   <span class="vocab-term">${v.term}</span>
-                  <span class="vocab-kana">${v.kana}</span>
+                  <span class="vocab-reading">${notation === 'kana' ? v.kana : v.romaji}</span>
                   ${v.type ? `<span class="vocab-type">${v.type}</span>` : ''}
                 </div>
                 <span class="vocab-meaning">${v.meaning}</span>
@@ -133,9 +136,9 @@ export const StudyView: React.FC<StudyViewProps> = ({
           ${content.expressions.map(e => `
             <div class="expr-item">
               <div class="expr-phrase">${e.phrase}</div>
+              <span class="expr-reading">${notation === 'kana' ? e.kana : e.romaji}</span>
               <div>
                 <span class="expr-meaning">${e.meaning}</span>
-                ${e.nuance ? `<span class="expr-nuance">(${e.nuance})</span>` : ''}
               </div>
             </div>
           `).join('')}
@@ -150,6 +153,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
                 <div class="speaker-label">${l.roleName || l.speaker}</div>
                 <div class="line-content">
                   <div class="jp-text">${l.japanese}</div>
+                  <div class="reading-text">${notation === 'kana' ? l.kana : l.romaji}</div>
                   <div class="trans-text">${l.translation}</div>
                 </div>
               </div>
@@ -277,6 +281,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
             type="vocab" 
             savedItems={savedItems}
             onToggleSave={onToggleSave}
+            notation={notation}
           />
         )}
         
@@ -286,11 +291,12 @@ export const StudyView: React.FC<StudyViewProps> = ({
             type="expression" 
             savedItems={savedItems}
             onToggleSave={onToggleSave}
+            notation={notation}
           />
         )}
 
         {activeTab === 'dialogue' && (
-          <DialoguePlayer sections={content.dialogues} language={language} />
+          <DialoguePlayer sections={content.dialogues} language={language} notation={notation} />
         )}
       </div>
     </div>

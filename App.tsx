@@ -1,13 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
 import { Home } from './components/Home';
 import { StudyView } from './components/StudyView';
 import { FavoritesView } from './components/FavoritesView';
 import { ScenariosListView } from './components/ScenariosListView';
 import { UserMenu } from './components/UserMenu';
-import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem } from './types';
+import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation } from './types';
 import { generateScenarioContent } from './services/geminiService';
 import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID } from './services/firebase';
-import { Loader2, AlertCircle, RefreshCw, Globe, Star } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw, Globe, Star, type LucideIcon, Type } from 'lucide-react';
 import { UI_TEXT } from './constants';
 import { User } from 'firebase/auth';
 
@@ -22,6 +23,7 @@ export default function App() {
   
   // Global State
   const [language, setLanguage] = useState<Language>('zh');
+  const [notation, setNotation] = useState<Notation>('kana');
   
   // Auth State
   const [user, setUser] = useState<User | null>(null);
@@ -41,6 +43,12 @@ export default function App() {
       
       const history = localStorage.getItem('nihongo_scenarios');
       if (history) setScenarioHistory(JSON.parse(history));
+
+      // Restore notation preference
+      const savedNotation = localStorage.getItem('nihongo_notation');
+      if (savedNotation === 'kana' || savedNotation === 'romaji') {
+        setNotation(savedNotation);
+      }
     } catch (e) {
       console.error("Failed to load local storage", e);
     }
@@ -88,7 +96,11 @@ export default function App() {
       localStorage.setItem('nihongo_favorites', JSON.stringify(savedItems));
       localStorage.setItem('nihongo_scenarios', JSON.stringify(scenarioHistory));
     }
-  }, [savedItems, scenarioHistory, user, isSyncing]);
+    
+    // Save notation preference locally always
+    localStorage.setItem('nihongo_notation', notation);
+
+  }, [savedItems, scenarioHistory, user, isSyncing, notation]);
 
   const toggleSavedItem = (item: SavedItem) => {
     setSavedItems(prev => {
@@ -232,6 +244,10 @@ export default function App() {
   const toggleLanguage = () => {
     setLanguage(prev => prev === 'zh' ? 'en' : 'zh');
   };
+  
+  const toggleNotation = () => {
+    setNotation(prev => prev === 'kana' ? 'romaji' : 'kana');
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
@@ -252,6 +268,16 @@ export default function App() {
           >
             <Star className="w-5 h-5" />
             <span className="text-sm font-medium hidden sm:inline">{t.favorites}</span>
+          </button>
+
+          {/* Notation Toggle */}
+          <button
+            onClick={toggleNotation}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors"
+            title={t.notation}
+          >
+            <Type className="w-4 h-4" />
+            {notation === 'kana' ? 'あ' : 'A'}
           </button>
 
           <button 
@@ -287,6 +313,7 @@ export default function App() {
             onBack={() => setViewState(ViewState.HOME)}
             language={language}
             onToggleSave={toggleSavedItem}
+            notation={notation}
           />
         )}
 
@@ -325,6 +352,7 @@ export default function App() {
             onToggleSave={toggleSavedItem}
             onRegenerate={handleRegenerate}
             onSelectVersion={handleVersionSelect}
+            notation={notation}
           />
         )}
 

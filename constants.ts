@@ -1,3 +1,4 @@
+
 import { Category } from './types';
 
 export const CATEGORIES: Category[] = [
@@ -195,7 +196,10 @@ export const UI_TEXT = {
     guest: '访客',
     download: '下载 PDF',
     generatingPDF: '正在生成...',
-    shuffle: '换一批'
+    shuffle: '换一批',
+    notation: '发音显示',
+    kana: '平假名',
+    romaji: '罗马音'
   },
   en: {
     title: 'Nihongo Scene Master',
@@ -236,6 +240,9 @@ export const UI_TEXT = {
     guest: 'Guest',
     download: 'Download PDF',
     generatingPDF: 'Generating...',
-    shuffle: 'Shuffle'
+    shuffle: 'Shuffle',
+    notation: 'Notation',
+    kana: 'Kana',
+    romaji: 'Romaji'
   }
 };

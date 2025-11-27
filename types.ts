@@ -1,14 +1,19 @@
+
 export type Language = 'zh' | 'en';
+export type Notation = 'kana' | 'romaji';
 
 export interface VocabularyItem {
   term: string;
   kana: string;
+  romaji: string;
   meaning: string;
   type: string; // e.g., Noun, Verb
 }
 
 export interface ExpressionItem {
   phrase: string;
+  kana: string;
+  romaji: string;
   meaning: string;
   nuance?: string; // Casual, Keigo, etc.
 }
@@ -17,7 +22,8 @@ export interface DialogueLine {
   speaker: 'A' | 'B';
   roleName?: string; // e.g., "Staff", "Customer"
   japanese: string;
-  romaji?: string;
+  kana: string;
+  romaji: string;
   translation: string;
 }
 

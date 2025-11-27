@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ScenarioContent, Language } from "../types";
 
@@ -69,14 +70,14 @@ export const generateScenarioContent = async (scenario: string, language: Langua
     ? "All 'meaning' and 'translation' fields MUST be in Simplified Chinese. The 'scenarioName' field MUST be exactly: " + scenario
     : "All 'meaning' and 'translation' fields MUST be in English. The 'scenarioName' field MUST be exactly: " + scenario;
 
-  // Increased counts as requested: Vocab 30-35, Expressions 15-20
+  // Updated Prompt to explicitly request full pronunciation data
   const prompt = `
     Create a comprehensive Japanese language study guide for the specific scenario: "${scenario}".
     
     Requirements:
-    1. Vocabulary: 30-35 essential words specific to this scenario.
-    2. Expressions: 15-20 common useful phrases/sentence patterns (grammar points or set phrases).
-    3. Dialogues: Create a realistic conversation flow broken down into 3 distinct chronological sub-scenes (e.g., "Start", "Middle", "End" but named appropriately for the context).
+    1. Vocabulary: 30-35 essential words specific to this scenario. Include Kana (Hiragana/Katakana) and Romaji.
+    2. Expressions: 15-20 common useful phrases/sentence patterns. Include full reading in Kana and Romaji.
+    3. Dialogues: Create a realistic conversation flow broken down into 3 distinct chronological sub-scenes. Include full reading in Kana and Romaji for every line.
     4. Language: ${langInstruction}
     
     Ensure natural Japanese suitable for daily life.
@@ -97,7 +98,8 @@ export const generateScenarioContent = async (scenario: string, language: Langua
               type: Type.OBJECT,
               properties: {
                 term: { type: Type.STRING, description: "Kanji or main word" },
-                kana: { type: Type.STRING, description: "Furigana/Reading" },
+                kana: { type: Type.STRING, description: "Furigana/Reading in Kana" },
+                romaji: { type: Type.STRING, description: "Reading in Romaji" },
                 meaning: { type: Type.STRING, description: "Meaning in user language" },
                 type: { type: Type.STRING, description: "Noun, Verb, etc." }
               }
@@ -109,6 +111,8 @@ export const generateScenarioContent = async (scenario: string, language: Langua
               type: Type.OBJECT,
               properties: {
                 phrase: { type: Type.STRING },
+                kana: { type: Type.STRING, description: "Reading in Kana" },
+                romaji: { type: Type.STRING, description: "Reading in Romaji" },
                 meaning: { type: Type.STRING, description: "Meaning in user language" },
                 nuance: { type: Type.STRING, description: "e.g., Polite, Casual" }
               }
@@ -128,6 +132,8 @@ export const generateScenarioContent = async (scenario: string, language: Langua
                       speaker: { type: Type.STRING, enum: ["A", "B"] },
                       roleName: { type: Type.STRING, description: "e.g. Staff, Customer" },
                       japanese: { type: Type.STRING },
+                      kana: { type: Type.STRING, description: "Reading in Kana" },
+                      romaji: { type: Type.STRING, description: "Reading in Romaji" },
                       translation: { type: Type.STRING, description: "Translation in user language" }
                     }
                   }
@@ -200,7 +206,7 @@ export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck')
         // B. Play Immediately (Gapless)
         const buffer = ctx.createBuffer(1, float32Data.length, 24000);
         
-        // TS FIX: Use 'any' cast to bypass strict ArrayBuffer vs SharedArrayBuffer mismatch in Vercel environment
+        // Use 'any' cast to bypass strict ArrayBuffer vs SharedArrayBuffer mismatch in Vercel environment
         buffer.copyToChannel(float32Data as any, 0);
 
         const source = ctx.createBufferSource();
@@ -221,7 +227,7 @@ export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck')
       const channelData = fullBuffer.getChannelData(0);
       let offset = 0;
       for (const chunk of collectedChunks) {
-        // TS FIX: Use 'any' cast
+        // Use 'any' cast
         channelData.set(chunk as any, offset);
         offset += chunk.length;
       }

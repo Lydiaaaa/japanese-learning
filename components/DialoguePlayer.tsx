@@ -1,5 +1,6 @@
+
 import React, { useState, useRef } from 'react';
-import { DialogueSection, Language } from '../types';
+import { DialogueSection, Language, Notation } from '../types';
 import { Play, Pause, Mic, Volume2, ChevronDown, ChevronUp } from 'lucide-react';
 import { playTTS } from '../services/geminiService';
 import { UI_TEXT } from '../constants';
@@ -7,9 +8,10 @@ import { UI_TEXT } from '../constants';
 interface Props {
   sections: DialogueSection[];
   language: Language;
+  notation: Notation;
 }
 
-export const DialoguePlayer: React.FC<Props> = ({ sections, language }) => {
+export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }) => {
   const [activeSection, setActiveSection] = useState<number>(0);
   const [playingLine, setPlayingLine] = useState<{sectionIdx: number, lineIdx: number} | null>(null);
   const [recordingLine, setRecordingLine] = useState<{sectionIdx: number, lineIdx: number} | null>(null);
@@ -22,7 +24,6 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language }) => {
   // Play AI Audio
   const handlePlayLine = async (sectionIdx: number, lineIdx: number, text: string, speaker: string) => {
     if (playingLine?.sectionIdx === sectionIdx && playingLine?.lineIdx === lineIdx) {
-        // Already playing, do nothing or simple ignore as we can't easily stop the promise based one-off audio context without complex logic
         return;
     }
 
@@ -54,7 +55,6 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language }) => {
         const audioUrl = URL.createObjectURL(audioBlob);
         setRecordedAudio(prev => ({...prev, [`${sectionIdx}-${lineIdx}`]: audioUrl}));
         setRecordingLine(null);
-        // Stop tracks
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -114,8 +114,17 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language }) => {
                         <div className={`p-4 rounded-2xl text-lg font-medium leading-relaxed relative group transition-all ${
                            isUser ? 'bg-indigo-50 text-slate-800 rounded-tr-none' : 'bg-slate-100 text-slate-800 rounded-tl-none'
                         } ${isPlaying ? 'ring-2 ring-indigo-400 shadow-md' : ''}`}>
-                          {line.japanese}
-                          <p className="text-sm font-normal text-slate-500 mt-1 border-t border-black/5 pt-1">{line.translation}</p>
+                          
+                          {/* Japanese Text */}
+                          <div className="mb-1">{line.japanese}</div>
+                          
+                          {/* Pronunciation Line (Added) */}
+                          <div className="text-sm font-normal text-indigo-600 mb-2 border-b border-black/5 pb-2">
+                             {notation === 'kana' ? line.kana : line.romaji}
+                          </div>
+
+                          {/* Translation */}
+                          <p className="text-sm font-normal text-slate-500">{line.translation}</p>
                           
                           {/* Action Bar Overlay */}
                           <div className="flex gap-2 mt-3 justify-end">

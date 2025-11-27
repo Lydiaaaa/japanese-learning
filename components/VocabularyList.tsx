@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { VocabularyItem, ExpressionItem, SavedItem } from '../types';
+import { VocabularyItem, ExpressionItem, SavedItem, Notation } from '../types';
 import { Volume2, Star } from 'lucide-react';
 import { playTTS } from '../services/geminiService';
 
@@ -8,9 +9,10 @@ interface Props {
   type: 'vocab' | 'expression';
   savedItems: SavedItem[];
   onToggleSave: (item: SavedItem) => void;
+  notation: Notation;
 }
 
-export const VocabularyList: React.FC<Props> = ({ items, type, savedItems, onToggleSave }) => {
+export const VocabularyList: React.FC<Props> = ({ items, type, savedItems, onToggleSave, notation }) => {
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
 
   const handlePlay = async (text: string, index: number) => {
@@ -49,7 +51,12 @@ export const VocabularyList: React.FC<Props> = ({ items, type, savedItems, onTog
       {items.map((item, idx) => {
         const isVocab = type === 'vocab';
         const mainText = isVocab ? (item as VocabularyItem).term : (item as ExpressionItem).phrase;
-        const subText = isVocab ? (item as VocabularyItem).kana : (item as ExpressionItem).nuance;
+        
+        // Dynamic pronunciation display
+        const kana = isVocab ? (item as VocabularyItem).kana : (item as ExpressionItem).kana;
+        const romaji = isVocab ? (item as VocabularyItem).romaji : (item as ExpressionItem).romaji;
+        const subText = notation === 'kana' ? kana : romaji;
+        
         const meaning = item.meaning;
         const tag = isVocab ? (item as VocabularyItem).type : null;
         const saved = isSaved(item);
