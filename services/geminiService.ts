@@ -199,7 +199,9 @@ export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck')
 
         // B. Play Immediately (Gapless)
         const buffer = ctx.createBuffer(1, float32Data.length, 24000);
-        buffer.copyToChannel(float32Data, 0);
+        
+        // TS FIX: Explicitly cast to Float32Array to satisfy strict ArrayBuffer types
+        buffer.copyToChannel(float32Data as Float32Array, 0);
 
         const source = ctx.createBufferSource();
         source.buffer = buffer;
@@ -219,7 +221,8 @@ export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck')
       const channelData = fullBuffer.getChannelData(0);
       let offset = 0;
       for (const chunk of collectedChunks) {
-        channelData.set(chunk, offset);
+        // TS FIX: Explicitly cast to Float32Array
+        channelData.set(chunk as Float32Array, offset);
         offset += chunk.length;
       }
       audioCache.set(cacheKey, fullBuffer);
