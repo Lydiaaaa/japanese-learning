@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { ScenarioContent, Language, SavedItem, Notation } from '../types';
 import { BookOpen, MessageCircle, GraduationCap, ChevronLeft, RotateCw, Clock, Download } from 'lucide-react';
@@ -201,122 +200,126 @@ export const StudyView: React.FC<StudyViewProps> = ({
   };
 
   return (
-    <div className="max-w-4xl mx-auto h-[calc(100vh-2rem)] flex flex-col">
-      {/* Header */}
-      <div className="bg-white p-4 md:p-6 rounded-b-2xl md:rounded-2xl shadow-sm border border-slate-100 mb-6 flex-shrink-0">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={onBack}
-              className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"
-            >
-              <ChevronLeft className="w-6 h-6" />
-            </button>
-            <div>
-              <h2 className="text-xs font-bold text-indigo-600 uppercase tracking-wider">{t.currentScenario}</h2>
-              <h1 className="text-2xl font-bold text-slate-800 leading-tight">{content.scenarioName}</h1>
+    <div className="flex flex-col h-full w-full">
+      {/* Header - Fixed width content, but container spans full width */}
+      <div className="bg-white border-b border-slate-100 flex-shrink-0 w-full">
+        <div className="max-w-4xl mx-auto p-4 md:p-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={onBack}
+                className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+              <div>
+                <h2 className="text-xs font-bold text-indigo-600 uppercase tracking-wider">{t.currentScenario}</h2>
+                <h1 className="text-2xl font-bold text-slate-800 leading-tight">{content.scenarioName}</h1>
+              </div>
+            </div>
+            
+            {/* Action Area */}
+            <div className="flex items-center gap-2 ml-12 md:ml-0 flex-wrap">
+               {versions.length > 1 && (
+                 <div className="relative group">
+                   <select 
+                     value={currentVersionIndex}
+                     onChange={(e) => onSelectVersion(Number(e.target.value))}
+                     className="appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg pl-9 pr-8 py-2 focus:ring-indigo-500 focus:border-indigo-500 block cursor-pointer hover:bg-slate-100 transition-colors font-medium"
+                   >
+                     {versions.map((v, idx) => (
+                       <option key={idx} value={idx}>
+                         {idx === 0 ? t.latest : `V${versions.length - idx}`} - {formatTime(v.timestamp)}
+                       </option>
+                     ))}
+                   </select>
+                   <Clock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+                 </div>
+               )}
+
+               <button
+                 onClick={onRegenerate}
+                 className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors"
+               >
+                 <RotateCw className="w-4 h-4" />
+                 <span className="hidden sm:inline">{t.regenerate}</span>
+               </button>
+
+               <button
+                 onClick={handleDownloadPDF}
+                 className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-900 transition-colors shadow-sm"
+                 title="Print to PDF"
+               >
+                 <Download className="w-4 h-4" />
+                 <span className="hidden sm:inline">{t.download}</span>
+               </button>
             </div>
           </div>
-          
-          {/* Action Area */}
-          <div className="flex items-center gap-2 ml-12 md:ml-0 flex-wrap">
-             {versions.length > 1 && (
-               <div className="relative group">
-                 <select 
-                   value={currentVersionIndex}
-                   onChange={(e) => onSelectVersion(Number(e.target.value))}
-                   className="appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg pl-9 pr-8 py-2 focus:ring-indigo-500 focus:border-indigo-500 block cursor-pointer hover:bg-slate-100 transition-colors font-medium"
-                 >
-                   {versions.map((v, idx) => (
-                     <option key={idx} value={idx}>
-                       {idx === 0 ? t.latest : `V${versions.length - idx}`} - {formatTime(v.timestamp)}
-                     </option>
-                   ))}
-                 </select>
-                 <Clock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
-               </div>
-             )}
 
-             <button
-               onClick={onRegenerate}
-               className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors"
-             >
-               <RotateCw className="w-4 h-4" />
-               <span className="hidden sm:inline">{t.regenerate}</span>
-             </button>
-
-             <button
-               onClick={handleDownloadPDF}
-               className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-900 transition-colors shadow-sm"
-               title="Print to PDF"
-             >
-               <Download className="w-4 h-4" />
-               <span className="hidden sm:inline">{t.download}</span>
-             </button>
+          <div className="flex gap-2 bg-slate-100 p-1 rounded-xl w-fit">
+            <button
+              onClick={() => setActiveTab('vocab')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                activeTab === 'vocab' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              {t.vocab}
+            </button>
+            <button
+              onClick={() => setActiveTab('expressions')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                activeTab === 'expressions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <GraduationCap className="w-4 h-4" />
+              {t.expressions}
+            </button>
+            <button
+              onClick={() => setActiveTab('dialogue')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                activeTab === 'dialogue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <MessageCircle className="w-4 h-4" />
+              {t.dialogue}
+            </button>
           </div>
-        </div>
-
-        <div className="flex gap-2 bg-slate-100 p-1 rounded-xl w-fit">
-          <button
-            onClick={() => setActiveTab('vocab')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-              activeTab === 'vocab' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            {t.vocab}
-          </button>
-          <button
-            onClick={() => setActiveTab('expressions')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-              activeTab === 'expressions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <GraduationCap className="w-4 h-4" />
-            {t.expressions}
-          </button>
-          <button
-            onClick={() => setActiveTab('dialogue')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-              activeTab === 'dialogue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <MessageCircle className="w-4 h-4" />
-            {t.dialogue}
-          </button>
         </div>
       </div>
 
-      {/* Scrollable Content Area */}
+      {/* Scrollable Content Area - Full Width, content centered inside */}
       <div 
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto no-scrollbar pb-10"
+        className="flex-1 overflow-y-auto no-scrollbar w-full"
       >
-        {activeTab === 'vocab' && (
-          <VocabularyList 
-            items={content.vocabulary} 
-            type="vocab" 
-            savedItems={savedItems}
-            onToggleSave={onToggleSave}
-            notation={notation}
-            language={language}
-          />
-        )}
-        
-        {activeTab === 'expressions' && (
-          <VocabularyList 
-            items={content.expressions} 
-            type="expression" 
-            savedItems={savedItems}
-            onToggleSave={onToggleSave}
-            notation={notation}
-            language={language}
-          />
-        )}
+        <div className="max-w-4xl mx-auto pb-10 pt-6">
+          {activeTab === 'vocab' && (
+            <VocabularyList 
+              items={content.vocabulary} 
+              type="vocab" 
+              savedItems={savedItems}
+              onToggleSave={onToggleSave}
+              notation={notation}
+              language={language}
+            />
+          )}
+          
+          {activeTab === 'expressions' && (
+            <VocabularyList 
+              items={content.expressions} 
+              type="expression" 
+              savedItems={savedItems}
+              onToggleSave={onToggleSave}
+              notation={notation}
+              language={language}
+            />
+          )}
 
-        {activeTab === 'dialogue' && (
-          <DialoguePlayer sections={content.dialogues} language={language} notation={notation} />
-        )}
+          {activeTab === 'dialogue' && (
+            <DialoguePlayer sections={content.dialogues} language={language} notation={notation} />
+          )}
+        </div>
       </div>
     </div>
   );

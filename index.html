@@ -31,6 +31,11 @@
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
+      html, body {
+        height: 100%;
+        overflow: hidden; /* Prevent body scroll, delegate to app containers */
+        overscroll-behavior-y: none; /* Prevent Mac touchpad bounce/overscroll */
+      }
       body {
         font-family: 'Inter', 'Noto Sans JP', sans-serif;
         background-color: #f8fafc;

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Home } from './components/Home';
 import { StudyView } from './components/StudyView';
@@ -250,8 +249,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      <nav className="bg-white border-b border-slate-100 px-6 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
+    // Changed: h-screen and overflow-hidden to handle scrolling internally
+    <div className="h-screen flex flex-col bg-slate-50 text-slate-900 font-sans overflow-hidden">
+      <nav className="bg-white border-b border-slate-100 px-6 py-4 flex justify-between items-center z-10 shadow-sm flex-shrink-0">
         <div 
           className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={() => setViewState(ViewState.HOME)}
@@ -298,7 +298,7 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="container mx-auto md:mt-6">
+      <main className="flex-1 overflow-hidden relative w-full">
         {viewState === ViewState.HOME && (
           <Home 
             onScenarioSelect={handleScenarioSelect} 
@@ -328,7 +328,7 @@ export default function App() {
         )}
 
         {viewState === ViewState.GENERATING && (
-          <div className="flex flex-col items-center justify-center h-[60vh] text-center px-6">
+          <div className="flex flex-col items-center justify-center h-full text-center px-6 overflow-y-auto">
             <div className="relative">
               <div className="absolute inset-0 bg-indigo-200 rounded-full blur-xl opacity-50 animate-pulse"></div>
               <Loader2 className="w-16 h-16 text-indigo-600 animate-spin relative z-10" />
@@ -357,7 +357,7 @@ export default function App() {
         )}
 
         {viewState === ViewState.ERROR && (
-          <div className="flex flex-col items-center justify-center h-[60vh] text-center px-6">
+          <div className="flex flex-col items-center justify-center h-full text-center px-6 overflow-y-auto">
             <div className="p-4 bg-red-50 rounded-full mb-4">
               <AlertCircle className="w-12 h-12 text-red-500" />
             </div>

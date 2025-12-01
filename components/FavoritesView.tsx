@@ -22,9 +22,9 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ savedItems, onBack
   const exprItems = savedItems.filter(i => i.type === 'expression').map(i => i.content as ExpressionItem);
 
   return (
-    <div className="max-w-4xl mx-auto h-[calc(100vh-2rem)] flex flex-col">
+    <div className="flex flex-col h-full w-full">
       <div className="bg-white p-4 md:p-6 rounded-b-2xl md:rounded-2xl shadow-sm border border-slate-100 mb-6 flex-shrink-0">
-        <div className="flex items-center gap-4">
+        <div className="max-w-4xl mx-auto flex items-center gap-4">
           <button 
             onClick={onBack}
             className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"
@@ -40,28 +40,30 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ savedItems, onBack
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
-        {savedItems.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-            <Star className="w-12 h-12 mb-4 opacity-20" />
-            <p>{t.noFavorites}</p>
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {vocabItems.length > 0 && (
-              <div>
-                <h2 className="text-lg font-bold text-slate-700 px-4 mb-4">{t.vocab}</h2>
-                <VocabularyList items={vocabItems} type="vocab" savedItems={savedItems} onToggleSave={onToggleSave} notation={notation} language={language} />
-              </div>
-            )}
-            {exprItems.length > 0 && (
-              <div>
-                <h2 className="text-lg font-bold text-slate-700 px-4 mb-4">{t.expressions}</h2>
-                <VocabularyList items={exprItems} type="expression" savedItems={savedItems} onToggleSave={onToggleSave} notation={notation} language={language} />
-              </div>
-            )}
-          </div>
-        )}
+      <div className="flex-1 overflow-y-auto no-scrollbar pb-10 w-full">
+        <div className="max-w-4xl mx-auto px-4">
+          {savedItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+              <Star className="w-12 h-12 mb-4 opacity-20" />
+              <p>{t.noFavorites}</p>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              {vocabItems.length > 0 && (
+                <div>
+                  <h2 className="text-lg font-bold text-slate-700 px-4 mb-4">{t.vocab}</h2>
+                  <VocabularyList items={vocabItems} type="vocab" savedItems={savedItems} onToggleSave={onToggleSave} notation={notation} language={language} />
+                </div>
+              )}
+              {exprItems.length > 0 && (
+                <div>
+                  <h2 className="text-lg font-bold text-slate-700 px-4 mb-4">{t.expressions}</h2>
+                  <VocabularyList items={exprItems} type="expression" savedItems={savedItems} onToggleSave={onToggleSave} notation={notation} language={language} />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
