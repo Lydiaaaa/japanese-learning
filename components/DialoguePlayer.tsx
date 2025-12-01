@@ -11,6 +11,12 @@ interface Props {
   notation: Notation;
 }
 
+// Helper to extract translation string based on language
+const getTranslation = (trans: string | { en: string; zh: string }, lang: Language) => {
+  if (typeof trans === 'string') return trans;
+  return trans[lang] || trans.en;
+};
+
 export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }) => {
   const [activeSection, setActiveSection] = useState<number>(0);
   const [playingLine, setPlayingLine] = useState<{sectionIdx: number, lineIdx: number} | null>(null);
@@ -103,6 +109,7 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
                   const isRecording = recordingLine?.sectionIdx === sIdx && recordingLine?.lineIdx === lIdx;
                   const hasRecording = !!recordedAudio[`${sIdx}-${lIdx}`];
                   const isUser = line.speaker === 'A'; // Let's assume A is User for styling
+                  const translation = getTranslation(line.translation, language);
 
                   return (
                     <div key={lIdx} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -124,7 +131,7 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
                           </div>
 
                           {/* Translation */}
-                          <p className="text-sm font-normal text-slate-500">{line.translation}</p>
+                          <p className="text-sm font-normal text-slate-500">{translation}</p>
                           
                           {/* Action Bar Overlay */}
                           <div className="flex gap-2 mt-3 justify-end">

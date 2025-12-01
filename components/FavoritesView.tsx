@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { SavedItem, Language, VocabularyItem, ExpressionItem, Notation } from '../types';
 import { VocabularyList } from './VocabularyList';
@@ -52,13 +51,13 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ savedItems, onBack
             {vocabItems.length > 0 && (
               <div>
                 <h2 className="text-lg font-bold text-slate-700 px-4 mb-4">{t.vocab}</h2>
-                <VocabularyList items={vocabItems} type="vocab" savedItems={savedItems} onToggleSave={onToggleSave} notation={notation} />
+                <VocabularyList items={vocabItems} type="vocab" savedItems={savedItems} onToggleSave={onToggleSave} notation={notation} language={language} />
               </div>
             )}
             {exprItems.length > 0 && (
               <div>
                 <h2 className="text-lg font-bold text-slate-700 px-4 mb-4">{t.expressions}</h2>
-                <VocabularyList items={exprItems} type="expression" savedItems={savedItems} onToggleSave={onToggleSave} notation={notation} />
+                <VocabularyList items={exprItems} type="expression" savedItems={savedItems} onToggleSave={onToggleSave} notation={notation} language={language} />
               </div>
             )}
           </div>

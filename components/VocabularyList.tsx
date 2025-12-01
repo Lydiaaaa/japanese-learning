@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { VocabularyItem, ExpressionItem, SavedItem, Notation } from '../types';
+import { VocabularyItem, ExpressionItem, SavedItem, Notation, Language } from '../types';
 import { Volume2, Star } from 'lucide-react';
 import { playTTS } from '../services/geminiService';
 
@@ -10,9 +9,16 @@ interface Props {
   savedItems: SavedItem[];
   onToggleSave: (item: SavedItem) => void;
   notation: Notation;
+  language?: Language; // Add language prop for bilingual display
 }
 
-export const VocabularyList: React.FC<Props> = ({ items, type, savedItems, onToggleSave, notation }) => {
+// Helper to extract meaning string based on language
+const getMeaning = (meaning: string | { en: string; zh: string }, lang: Language) => {
+  if (typeof meaning === 'string') return meaning;
+  return meaning[lang] || meaning.en;
+};
+
+export const VocabularyList: React.FC<Props> = ({ items, type, savedItems, onToggleSave, notation, language = 'zh' }) => {
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
 
   const handlePlay = async (text: string, index: number) => {
@@ -57,7 +63,8 @@ export const VocabularyList: React.FC<Props> = ({ items, type, savedItems, onTog
         const romaji = isVocab ? (item as VocabularyItem).romaji : (item as ExpressionItem).romaji;
         const subText = notation === 'kana' ? kana : romaji;
         
-        const meaning = item.meaning;
+        // Explicitly cast language to Language to avoid TypeScript error where it might be inferred as string
+        const meaning = getMeaning(item.meaning, language as Language);
         const tag = isVocab ? (item as VocabularyItem).type : null;
         const saved = isSaved(item);
 

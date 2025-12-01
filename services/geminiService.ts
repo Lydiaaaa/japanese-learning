@@ -66,19 +66,14 @@ export const generateScenarioContent = async (scenario: string, language: Langua
   const currentKey = getApiKey();
   if (!currentKey) throw new Error("API Key missing");
 
-  const langInstruction = language === 'zh' 
-    ? "All 'meaning' and 'translation' fields MUST be in Simplified Chinese. The 'scenarioName' field MUST be exactly: " + scenario
-    : "All 'meaning' and 'translation' fields MUST be in English. The 'scenarioName' field MUST be exactly: " + scenario;
-
-  // Updated Prompt to explicitly request full pronunciation data
+  // Updated Prompt to explicitly request full pronunciation data AND bilingual translations
   const prompt = `
     Create a comprehensive Japanese language study guide for the specific scenario: "${scenario}".
     
     Requirements:
-    1. Vocabulary: 30-35 essential words specific to this scenario. Include Kana (Hiragana/Katakana) and Romaji.
-    2. Expressions: 15-20 common useful phrases/sentence patterns. Include full reading in Kana and Romaji.
-    3. Dialogues: Create a realistic conversation flow broken down into 3 distinct chronological sub-scenes. Include full reading in Kana and Romaji for every line.
-    4. Language: ${langInstruction}
+    1. Vocabulary: 30-35 essential words specific to this scenario. Include Kana (Hiragana/Katakana) and Romaji. Provide meanings in BOTH English and Simplified Chinese.
+    2. Expressions: 15-20 common useful phrases/sentence patterns. Include full reading in Kana and Romaji. Provide meanings in BOTH English and Simplified Chinese.
+    3. Dialogues: Create a realistic conversation flow broken down into 3 distinct chronological sub-scenes. Include full reading in Kana and Romaji for every line. Provide translations in BOTH English and Simplified Chinese.
     
     Ensure natural Japanese suitable for daily life.
   `;
@@ -100,7 +95,14 @@ export const generateScenarioContent = async (scenario: string, language: Langua
                 term: { type: Type.STRING, description: "Kanji or main word" },
                 kana: { type: Type.STRING, description: "Furigana/Reading in Kana" },
                 romaji: { type: Type.STRING, description: "Reading in Romaji" },
-                meaning: { type: Type.STRING, description: "Meaning in user language" },
+                meaning: { 
+                  type: Type.OBJECT, 
+                  properties: {
+                    en: { type: Type.STRING, description: "English meaning" },
+                    zh: { type: Type.STRING, description: "Chinese meaning" }
+                  },
+                  required: ["en", "zh"]
+                },
                 type: { type: Type.STRING, description: "Noun, Verb, etc." }
               }
             }
@@ -113,7 +115,14 @@ export const generateScenarioContent = async (scenario: string, language: Langua
                 phrase: { type: Type.STRING },
                 kana: { type: Type.STRING, description: "Reading in Kana" },
                 romaji: { type: Type.STRING, description: "Reading in Romaji" },
-                meaning: { type: Type.STRING, description: "Meaning in user language" },
+                meaning: { 
+                  type: Type.OBJECT, 
+                  properties: {
+                    en: { type: Type.STRING, description: "English meaning" },
+                    zh: { type: Type.STRING, description: "Chinese meaning" }
+                  },
+                  required: ["en", "zh"]
+                },
                 nuance: { type: Type.STRING, description: "e.g., Polite, Casual" }
               }
             }
@@ -134,7 +143,14 @@ export const generateScenarioContent = async (scenario: string, language: Langua
                       japanese: { type: Type.STRING },
                       kana: { type: Type.STRING, description: "Reading in Kana" },
                       romaji: { type: Type.STRING, description: "Reading in Romaji" },
-                      translation: { type: Type.STRING, description: "Translation in user language" }
+                      translation: { 
+                        type: Type.OBJECT, 
+                        properties: {
+                          en: { type: Type.STRING, description: "English translation" },
+                          zh: { type: Type.STRING, description: "Chinese translation" }
+                        },
+                        required: ["en", "zh"]
+                      }
                     }
                   }
                 }

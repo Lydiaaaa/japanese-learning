@@ -21,6 +21,12 @@ interface StudyViewProps {
 
 type Tab = 'vocab' | 'expressions' | 'dialogue';
 
+// Helper to extract string content
+const getLocalizedContent = (content: string | { en: string; zh: string }, lang: Language) => {
+  if (typeof content === 'string') return content;
+  return content[lang] || content.en;
+};
+
 export const StudyView: React.FC<StudyViewProps> = ({ 
   content, 
   versions,
@@ -125,7 +131,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
                   <span class="vocab-reading">${notation === 'kana' ? v.kana : v.romaji}</span>
                   ${v.type ? `<span class="vocab-type">${v.type}</span>` : ''}
                 </div>
-                <span class="vocab-meaning">${v.meaning}</span>
+                <span class="vocab-meaning">${getLocalizedContent(v.meaning, language)}</span>
               </div>
             `).join('')}
           </div>
@@ -138,7 +144,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
               <div class="expr-phrase">${e.phrase}</div>
               <span class="expr-reading">${notation === 'kana' ? e.kana : e.romaji}</span>
               <div>
-                <span class="expr-meaning">${e.meaning}</span>
+                <span class="expr-meaning">${getLocalizedContent(e.meaning, language)}</span>
               </div>
             </div>
           `).join('')}
@@ -154,7 +160,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
                 <div class="line-content">
                   <div class="jp-text">${l.japanese}</div>
                   <div class="reading-text">${notation === 'kana' ? l.kana : l.romaji}</div>
-                  <div class="trans-text">${l.translation}</div>
+                  <div class="trans-text">${getLocalizedContent(l.translation, language)}</div>
                 </div>
               </div>
             `).join('')}
@@ -282,6 +288,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
             savedItems={savedItems}
             onToggleSave={onToggleSave}
             notation={notation}
+            language={language}
           />
         )}
         
@@ -292,6 +299,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
             savedItems={savedItems}
             onToggleSave={onToggleSave}
             notation={notation}
+            language={language}
           />
         )}
 

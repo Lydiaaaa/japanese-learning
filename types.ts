@@ -6,29 +6,29 @@ export interface VocabularyItem {
   term: string;
   kana: string;
   romaji: string;
-  meaning: string;
-  type: string; // e.g., Noun, Verb
+  meaning: string | { en: string; zh: string }; // Updated for bilingual support
+  type: string; 
 }
 
 export interface ExpressionItem {
   phrase: string;
   kana: string;
   romaji: string;
-  meaning: string;
-  nuance?: string; // Casual, Keigo, etc.
+  meaning: string | { en: string; zh: string }; // Updated for bilingual support
+  nuance?: string; 
 }
 
 export interface DialogueLine {
   speaker: 'A' | 'B';
-  roleName?: string; // e.g., "Staff", "Customer"
+  roleName?: string; 
   japanese: string;
   kana: string;
   romaji: string;
-  translation: string;
+  translation: string | { en: string; zh: string }; // Updated for bilingual support
 }
 
 export interface DialogueSection {
-  title: string; // e.g., "Getting a Queue Number"
+  title: string; 
   lines: DialogueLine[];
 }
 
@@ -37,7 +37,7 @@ export interface ScenarioContent {
   vocabulary: VocabularyItem[];
   expressions: ExpressionItem[];
   dialogues: DialogueSection[];
-  timestamp?: number; // Added for versioning
+  timestamp?: number; 
 }
 
 export interface Category {
@@ -61,7 +61,7 @@ export interface SavedItem {
 }
 
 export interface ScenarioHistoryItem {
-  id: string; // Scenario name acting as ID
+  id: string; 
   name: string;
   versions: ScenarioContent[];
   lastAccessed: number;
