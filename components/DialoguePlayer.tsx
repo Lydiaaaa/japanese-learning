@@ -92,9 +92,9 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
   if (!activeSection) return null;
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 h-full">
-      {/* Sidebar: Scene List */}
-      <div className="md:w-64 flex-shrink-0 flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-2 md:pb-0 no-scrollbar">
+    <div className="flex flex-col md:flex-row gap-6 h-full items-start">
+      {/* Sidebar: Scene List - STICKY POSITION ADDED */}
+      <div className="md:w-64 flex-shrink-0 flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-2 md:pb-0 no-scrollbar md:sticky md:top-6 self-start z-10">
         {sections.map((sec, idx) => {
           const isActive = idx === activeSectionIdx;
           return (
@@ -124,7 +124,7 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
       </div>
 
       {/* Main Content: Dialogue Stream */}
-      <div className="flex-1 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col min-h-[500px]">
+      <div className="flex-1 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col min-h-[500px] w-full">
         {/* Header */}
         <div className="p-4 md:p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/50 rounded-t-2xl">
           <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
@@ -153,11 +153,11 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
                     </span>
                   </div>
 
-                  {/* Bubble */}
+                  {/* Bubble - UPDATED VISUALS FOR USER (Light Blue instead of Solid Blue) */}
                   <div className={`p-4 md:p-5 rounded-2xl text-lg font-medium relative group transition-all duration-300 ${
                       isUser 
-                        ? 'bg-indigo-600 text-white rounded-tr-sm shadow-indigo-100' 
-                        : 'bg-white border border-slate-100 text-slate-800 rounded-tl-sm shadow-sm'
+                        ? 'bg-indigo-50 border border-indigo-100 text-slate-800 rounded-tr-sm' // Light Blue
+                        : 'bg-white border border-slate-100 text-slate-800 rounded-tl-sm shadow-sm' // White
                     } ${isPlaying ? 'ring-4 ring-indigo-100' : ''}`}>
                     
                     {/* Japanese Text */}
@@ -165,13 +165,13 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
                     
                     {/* Pronunciation Line */}
                     <div className={`text-sm font-normal mb-3 pb-2 border-b border-dashed ${
-                      isUser ? 'text-indigo-100 border-indigo-400/30' : 'text-indigo-600 border-slate-100'
+                      isUser ? 'text-indigo-600 border-indigo-200' : 'text-indigo-600 border-slate-100'
                     }`}>
                         {notation === 'kana' ? line.kana : line.romaji}
                     </div>
 
                     {/* Translation */}
-                    <p className={`text-sm font-normal ${isUser ? 'text-indigo-100' : 'text-slate-500'}`}>
+                    <p className={`text-sm font-normal text-slate-500`}>
                       {translation}
                     </p>
                     
@@ -180,10 +180,8 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
                         {/* Listen */}
                         <button 
                           onClick={() => handlePlayLine(activeSectionIdx, lIdx, line.japanese, line.speaker)}
-                          className={`p-1.5 rounded-full transition-all ${
-                            isUser 
-                              ? (isPlaying ? 'bg-white text-indigo-600' : 'bg-indigo-500 text-indigo-100 hover:bg-indigo-400') 
-                              : (isPlaying ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200')
+                          className={`p-1.5 rounded-full transition-all bg-white border border-slate-100 shadow-sm ${
+                             isPlaying ? 'text-indigo-600 ring-2 ring-indigo-100' : 'text-slate-500 hover:text-indigo-600 hover:border-indigo-200'
                           }`}
                           title={t.listen}
                         >
@@ -194,10 +192,8 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
                         {!isRecording ? (
                           <button 
                             onClick={() => startRecording(activeSectionIdx, lIdx)}
-                            className={`p-1.5 rounded-full transition-all ${
-                              hasRecording 
-                                ? 'bg-emerald-500 text-white shadow-sm' 
-                                : (isUser ? 'bg-indigo-500 text-indigo-100 hover:bg-indigo-400' : 'bg-slate-100 text-slate-500 hover:bg-slate-200')
+                            className={`p-1.5 rounded-full transition-all bg-white border border-slate-100 shadow-sm ${
+                               hasRecording ? 'text-emerald-500 border-emerald-200' : 'text-slate-500 hover:text-indigo-600 hover:border-indigo-200'
                             }`}
                             title={t.record}
                           >
@@ -206,7 +202,7 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
                         ) : (
                           <button 
                             onClick={stopRecording}
-                            className="p-1.5 rounded-full bg-red-500 text-white animate-pulse"
+                            className="p-1.5 rounded-full bg-red-500 text-white animate-pulse shadow-sm"
                             title={t.stop}
                           >
                             <div className="w-3.5 h-3.5 bg-white rounded-sm" />
@@ -217,7 +213,7 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
                         {hasRecording && !isRecording && (
                           <button
                             onClick={() => playRecording(activeSectionIdx, lIdx)}
-                            className="p-1.5 rounded-full bg-emerald-100 text-emerald-600 hover:bg-emerald-200"
+                            className="p-1.5 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100 shadow-sm"
                             title={t.playMy}
                           >
                             <Play className="w-3.5 h-3.5" />
