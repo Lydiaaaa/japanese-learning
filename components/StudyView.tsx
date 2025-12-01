@@ -200,14 +200,11 @@ export const StudyView: React.FC<StudyViewProps> = ({
     }
   };
 
-  // Dynamic max-width based on active tab to support Split View in Dialogue
-  const containerMaxWidth = activeTab === 'dialogue' ? 'max-w-6xl' : 'max-w-4xl';
-
   return (
     <div className="flex flex-col h-full w-full">
       {/* Header - Fixed width content, but container spans full width */}
       <div className="bg-white border-b border-slate-100 flex-shrink-0 w-full">
-        <div className="max-w-4xl mx-auto p-4 md:p-6">
+        <div className="max-w-6xl mx-auto p-4 md:p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
             <div className="flex items-center gap-4">
               <button 
@@ -297,7 +294,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto no-scrollbar w-full bg-slate-50"
       >
-        <div className={`${containerMaxWidth} mx-auto pb-10 pt-6 px-4 md:px-6 transition-all duration-300 ease-in-out`}>
+        <div className="max-w-6xl mx-auto pb-10 pt-6 px-4 md:px-6 transition-all duration-300 ease-in-out">
           {activeTab === 'vocab' && (
             <VocabularyList 
               items={content.vocabulary} 
