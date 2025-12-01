@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { ScenarioContent, Language, SavedItem, Notation } from '../types';
 import { BookOpen, MessageCircle, GraduationCap, ChevronLeft, RotateCw, Clock, Download } from 'lucide-react';
@@ -199,6 +200,9 @@ export const StudyView: React.FC<StudyViewProps> = ({
     }
   };
 
+  // Dynamic max-width based on active tab to support Split View in Dialogue
+  const containerMaxWidth = activeTab === 'dialogue' ? 'max-w-6xl' : 'max-w-4xl';
+
   return (
     <div className="flex flex-col h-full w-full">
       {/* Header - Fixed width content, but container spans full width */}
@@ -291,9 +295,9 @@ export const StudyView: React.FC<StudyViewProps> = ({
       {/* Scrollable Content Area - Full Width, content centered inside */}
       <div 
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto no-scrollbar w-full"
+        className="flex-1 overflow-y-auto no-scrollbar w-full bg-slate-50"
       >
-        <div className="max-w-4xl mx-auto pb-10 pt-6">
+        <div className={`${containerMaxWidth} mx-auto pb-10 pt-6 px-4 md:px-6 transition-all duration-300 ease-in-out`}>
           {activeTab === 'vocab' && (
             <VocabularyList 
               items={content.vocabulary} 
