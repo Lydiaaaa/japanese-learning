@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ScenarioContent, Language, SavedItem, Notation } from '../types';
 import { BookOpen, MessageCircle, GraduationCap, ChevronLeft, RotateCw, Clock, Download } from 'lucide-react';
 import { VocabularyList } from './VocabularyList';
@@ -40,7 +40,15 @@ export const StudyView: React.FC<StudyViewProps> = ({
   notation
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('vocab');
+  const scrollContainerRef = useRef<HTMLDivElement>(null); // Ref for the scrollable container
   const t = UI_TEXT[language];
+
+  // Reset scroll position when activeTab changes
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [activeTab]);
 
   const formatTime = (timestamp?: number) => {
     if (!timestamp) return '';
@@ -280,7 +288,10 @@ export const StudyView: React.FC<StudyViewProps> = ({
       </div>
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
+      <div 
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto no-scrollbar pb-10"
+      >
         {activeTab === 'vocab' && (
           <VocabularyList 
             items={content.vocabulary} 
