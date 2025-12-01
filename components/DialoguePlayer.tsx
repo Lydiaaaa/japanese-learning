@@ -1,8 +1,8 @@
 
 import React, { useState, useRef } from 'react';
 import { DialogueSection, Language, Notation } from '../types';
-import { Play, Pause, Mic, Volume2, MessageSquare } from 'lucide-react';
-import { playTTS } from '../services/geminiService';
+import { Play, Pause, Mic, Volume2, MessageSquare, Download, Loader2 } from 'lucide-react';
+import { playTTS, generateDialogueAudio } from '../services/geminiService';
 import { UI_TEXT } from '../constants';
 
 interface Props {
@@ -22,6 +22,7 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
   const [playingLine, setPlayingLine] = useState<{sectionIdx: number, lineIdx: number} | null>(null);
   const [recordingLine, setRecordingLine] = useState<{sectionIdx: number, lineIdx: number} | null>(null);
   const [recordedAudio, setRecordedAudio] = useState<Record<string, string>>({}); // key: "secIdx-lineIdx" -> blobUrl
+  const [isDownloadingAudio, setIsDownloadingAudio] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -41,6 +42,37 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
       console.error("Audio Playback Error", error);
     } finally {
       setPlayingLine(null);
+    }
+  };
+
+  // Download Dialogue Audio
+  const handleDownloadAudio = async () => {
+    const section = sections[activeSectionIdx];
+    if (!section || isDownloadingAudio) return;
+
+    setIsDownloadingAudio(true);
+    try {
+        const linesToProcess = section.lines.map(line => ({
+            text: line.japanese,
+            speaker: line.speaker
+        }));
+
+        const wavBlob = await generateDialogueAudio(linesToProcess);
+        
+        // Create download link
+        const url = URL.createObjectURL(wavBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${section.title.replace(/\s+/g, '_')}_audio.wav`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error("Failed to generate audio file", error);
+        alert("Audio generation failed. Please check your connection.");
+    } finally {
+        setIsDownloadingAudio(false);
     }
   };
 
@@ -131,6 +163,14 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
             <span className="bg-indigo-100 text-indigo-600 text-xs px-2 py-1 rounded-md">SCENE {activeSectionIdx + 1}</span>
             {activeSection.title}
           </h3>
+          <button 
+             onClick={handleDownloadAudio}
+             disabled={isDownloadingAudio}
+             className="flex items-center gap-2 text-xs font-medium bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+             {isDownloadingAudio ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Download className="w-3.5 h-3.5" />}
+             {isDownloadingAudio ? t.generatingAudio : t.downloadAudio}
+          </button>
         </div>
 
         {/* Lines Container */}

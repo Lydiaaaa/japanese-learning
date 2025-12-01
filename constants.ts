@@ -199,7 +199,9 @@ export const UI_TEXT = {
     shuffle: '换一批',
     notation: '发音显示',
     kana: '平假名',
-    romaji: '罗马音'
+    romaji: '罗马音',
+    downloadAudio: '下载音频',
+    generatingAudio: '合成音频中...'
   },
   en: {
     title: 'Nihongo Scene Master',
@@ -243,6 +245,8 @@ export const UI_TEXT = {
     shuffle: 'Shuffle',
     notation: 'Notation',
     kana: 'Kana',
-    romaji: 'Romaji'
+    romaji: 'Romaji',
+    downloadAudio: 'Download Audio',
+    generatingAudio: 'Generating Audio...'
   }
 };
