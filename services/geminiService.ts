@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { ScenarioContent, Language } from "../types";
+import { ScenarioContent, Language, ProgressCallback, VoiceEngine } from "../types";
 
 // Helper to safely get the API Key in both Vite (production) and AI Studio (preview) environments
 const getApiKey = () => {
@@ -222,47 +222,110 @@ export const getAudioBuffer = async (text: string, voiceName: string): Promise<A
   return fullBuffer;
 };
 
-// Stitch dialogue lines into a single WAV Blob
-export const generateDialogueAudio = async (lines: {text: string, speaker: string}[]): Promise<Blob> => {
+// Generate Dialogue Audio with Concurrency Control and Progress Reporting
+export const generateDialogueAudioWithProgress = async (
+    lines: {text: string, speaker: string}[],
+    onProgress?: ProgressCallback
+): Promise<Blob> => {
    const ctx = getAudioContext();
    const buffers: AudioBuffer[] = [];
    
-   // 1. Fetch all buffers
-   for (const line of lines) {
-     const voice = line.speaker === 'A' ? 'Puck' : 'Kore';
-     const buffer = await getAudioBuffer(line.text, voice);
-     buffers.push(buffer);
+   // BATCH PROCESSING
+   const BATCH_SIZE = 3;
+   
+   for (let i = 0; i < lines.length; i += BATCH_SIZE) {
+       const batch = lines.slice(i, i + BATCH_SIZE);
+       
+       const batchPromises = batch.map(async (line, batchIdx) => {
+           const voice = line.speaker === 'A' ? 'Puck' : 'Kore';
+           let attempts = 0;
+           while (attempts < 3) {
+             try {
+               return await getAudioBuffer(line.text, voice);
+             } catch (e) {
+               attempts++;
+               await new Promise(r => setTimeout(r, 500 * attempts));
+               if (attempts === 3) throw e;
+             }
+           }
+           throw new Error("Failed to fetch audio");
+       });
+
+       const batchBuffers = await Promise.all(batchPromises);
+       buffers.push(...batchBuffers);
+       
+       if (onProgress) {
+           onProgress(Math.min(i + BATCH_SIZE, lines.length), lines.length);
+       }
+       await new Promise(r => setTimeout(r, 0));
    }
 
-   // 2. Calculate total length (adding 0.5s silence gap between lines)
    const gapSeconds = 0.5;
    const gapSamples = Math.floor(gapSeconds * 24000);
    const totalLength = buffers.reduce((acc, buf) => acc + buf.length + gapSamples, 0);
 
-   // 3. Create output buffer
    const outputBuffer = ctx.createBuffer(1, totalLength, 24000);
    const outputData = outputBuffer.getChannelData(0);
    
    let offset = 0;
    for (const buf of buffers) {
-     // cast to any for Vercel build compatibility
      outputData.set(buf.getChannelData(0) as any, offset);
      offset += buf.length + gapSamples;
    }
 
-   // 4. Encode to WAV
    return encodeWAV(outputData, 24000);
 };
 
-// Optimized Play TTS using Streaming + Caching
-export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck'): Promise<void> => {
+// Native Browser TTS (Fast & Free)
+export const playSystemTTS = (text: string): Promise<void> => {
+    return new Promise((resolve) => {
+        if (!window.speechSynthesis) {
+            console.error("Web Speech API not supported");
+            resolve();
+            return;
+        }
+
+        // Cancel previous utterances
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'ja-JP';
+        utterance.rate = 1.0; 
+        
+        // Try to find a Japanese voice
+        const voices = window.speechSynthesis.getVoices();
+        const jaVoice = voices.find(v => v.lang.includes('ja') || v.name.includes('Japanese'));
+        if (jaVoice) {
+            utterance.voice = jaVoice;
+        }
+
+        utterance.onend = () => {
+            resolve();
+        };
+
+        utterance.onerror = (e) => {
+            console.error("System TTS Error", e);
+            resolve(); // Resolve anyway to reset UI state
+        };
+
+        window.speechSynthesis.speak(utterance);
+    });
+};
+
+// Unified Play TTS function
+export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck', engine: VoiceEngine = 'system'): Promise<void> => {
+  // If engine is system, use native browser TTS
+  if (engine === 'system') {
+    return playSystemTTS(text);
+  }
+
+  // Otherwise, use Gemini AI
   const currentKey = getApiKey();
   if (!currentKey) throw new Error("API Key missing");
 
   const ctx = getAudioContext();
   const cacheKey = `${voiceName}-${text}`;
 
-  // 1. HIT CACHE? Play immediately with Zero Latency.
   if (audioCache.has(cacheKey)) {
     const buffer = audioCache.get(cacheKey)!;
     const source = ctx.createBufferSource();
@@ -272,7 +335,6 @@ export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck')
     return;
   }
 
-  // 2. MISS CACHE? Stream from API.
   try {
     const stream = await ai.models.generateContentStream({
       model: "gemini-2.5-flash-preview-tts",
@@ -288,7 +350,6 @@ export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck')
     });
 
     let nextStartTime = ctx.currentTime;
-    // We collect all chunks to build a cache entry after playback
     const collectedChunks: Float32Array[] = [];
     let totalLength = 0;
 
@@ -297,36 +358,27 @@ export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck')
       
       if (base64Audio) {
         const float32Data = processAudioChunk(base64Audio);
-        
-        // A. Store for Cache
         collectedChunks.push(float32Data);
         totalLength += float32Data.length;
 
-        // B. Play Immediately (Gapless)
         const buffer = ctx.createBuffer(1, float32Data.length, 24000);
-        
-        // Use 'any' cast to bypass strict ArrayBuffer vs SharedArrayBuffer mismatch in Vercel environment
         buffer.copyToChannel(float32Data as any, 0);
 
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         source.connect(ctx.destination);
 
-        // Schedule playback: max(now, end of previous chunk)
         const startAt = Math.max(ctx.currentTime, nextStartTime);
         source.start(startAt);
-        
         nextStartTime = startAt + buffer.duration;
       }
     }
 
-    // 3. BUILD CACHE (Construct full buffer for next time)
     if (totalLength > 0) {
       const fullBuffer = ctx.createBuffer(1, totalLength, 24000);
       const channelData = fullBuffer.getChannelData(0);
       let offset = 0;
       for (const chunk of collectedChunks) {
-        // Use 'any' cast
         channelData.set(chunk as any, offset);
         offset += chunk.length;
       }
@@ -350,39 +402,23 @@ function encodeWAV(samples: Float32Array, sampleRate: number): Blob {
     }
   };
 
-  /* RIFF identifier */
   writeString(view, 0, 'RIFF');
-  /* RIFF chunk length */
   view.setUint32(4, 36 + samples.length * 2, true);
-  /* RIFF type */
   writeString(view, 8, 'WAVE');
-  /* format chunk identifier */
   writeString(view, 12, 'fmt ');
-  /* format chunk length */
   view.setUint32(16, 16, true);
-  /* sample format (raw) */
   view.setUint16(20, 1, true);
-  /* channel count */
   view.setUint16(22, 1, true);
-  /* sample rate */
   view.setUint32(24, sampleRate, true);
-  /* byte rate (sample rate * block align) */
   view.setUint32(28, sampleRate * 2, true);
-  /* block align (channel count * bytes per sample) */
   view.setUint16(32, 2, true);
-  /* bits per sample */
   view.setUint16(34, 16, true);
-  /* data chunk identifier */
   writeString(view, 36, 'data');
-  /* data chunk length */
   view.setUint32(40, samples.length * 2, true);
 
-  // Write PCM samples
   let offset = 44;
   for (let i = 0; i < samples.length; i++, offset += 2) {
-    // Clamp values to -1.0 to 1.0 range
     const s = Math.max(-1, Math.min(1, samples[i]));
-    // Convert to 16-bit PCM
     view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
   }
 

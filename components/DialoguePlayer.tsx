@@ -1,34 +1,34 @@
 
 import React, { useState, useRef } from 'react';
-import { DialogueSection, Language, Notation } from '../types';
+import { DialogueSection, Language, Notation, VoiceEngine } from '../types';
 import { Play, Pause, Mic, Volume2, MessageSquare, Download, Loader2 } from 'lucide-react';
-import { playTTS, generateDialogueAudio } from '../services/geminiService';
+import { playTTS, generateDialogueAudioWithProgress } from '../services/geminiService';
 import { UI_TEXT } from '../constants';
 
 interface Props {
   sections: DialogueSection[];
   language: Language;
   notation: Notation;
+  voiceEngine?: VoiceEngine;
 }
 
-// Helper to extract translation string based on language
 const getTranslation = (trans: string | { en: string; zh: string }, lang: Language) => {
   if (typeof trans === 'string') return trans;
   return trans[lang] || trans.en;
 };
 
-export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }) => {
+export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, voiceEngine = 'system' }) => {
   const [activeSectionIdx, setActiveSectionIdx] = useState<number>(0);
   const [playingLine, setPlayingLine] = useState<{sectionIdx: number, lineIdx: number} | null>(null);
   const [recordingLine, setRecordingLine] = useState<{sectionIdx: number, lineIdx: number} | null>(null);
-  const [recordedAudio, setRecordedAudio] = useState<Record<string, string>>({}); // key: "secIdx-lineIdx" -> blobUrl
+  const [recordedAudio, setRecordedAudio] = useState<Record<string, string>>({}); 
   const [isDownloadingAudio, setIsDownloadingAudio] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<string>('');
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const t = UI_TEXT[language];
 
-  // Play AI Audio
   const handlePlayLine = async (sectionIdx: number, lineIdx: number, text: string, speaker: string) => {
     if (playingLine?.sectionIdx === sectionIdx && playingLine?.lineIdx === lineIdx) {
         return;
@@ -36,30 +36,36 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
 
     setPlayingLine({ sectionIdx, lineIdx });
     try {
-      const voice = speaker === 'A' ? 'Puck' : 'Kore'; // Differentiate speakers
-      await playTTS(text, voice);
+      const voice = speaker === 'A' ? 'Puck' : 'Kore'; 
+      await playTTS(text, voice, voiceEngine as VoiceEngine);
     } catch (error) {
       console.error("Audio Playback Error", error);
     } finally {
-      setPlayingLine(null);
+      setTimeout(() => setPlayingLine(null), 300);
     }
   };
 
-  // Download Dialogue Audio
   const handleDownloadAudio = async () => {
     const section = sections[activeSectionIdx];
     if (!section || isDownloadingAudio) return;
 
     setIsDownloadingAudio(true);
+    setDownloadProgress('0%');
+    
     try {
         const linesToProcess = section.lines.map(line => ({
             text: line.japanese,
             speaker: line.speaker
         }));
 
-        const wavBlob = await generateDialogueAudio(linesToProcess);
+        const wavBlob = await generateDialogueAudioWithProgress(
+          linesToProcess,
+          (completed, total) => {
+             const pct = Math.round((completed / total) * 100);
+             setDownloadProgress(`${pct}%`);
+          }
+        );
         
-        // Create download link
         const url = URL.createObjectURL(wavBlob);
         const a = document.createElement('a');
         a.href = url;
@@ -73,10 +79,10 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
         alert("Audio generation failed. Please check your connection.");
     } finally {
         setIsDownloadingAudio(false);
+        setDownloadProgress('');
     }
   };
 
-  // Recording Logic
   const startRecording = async (sectionIdx: number, lineIdx: number) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -125,7 +131,6 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
 
   return (
     <div className="flex flex-col md:flex-row gap-6 h-full items-start">
-      {/* Sidebar: Scene List - STICKY POSITION ADDED */}
       <div className="md:w-64 flex-shrink-0 flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-2 md:pb-0 no-scrollbar md:sticky md:top-6 self-start z-10">
         {sections.map((sec, idx) => {
           const isActive = idx === activeSectionIdx;
@@ -155,9 +160,7 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
         })}
       </div>
 
-      {/* Main Content: Dialogue Stream */}
       <div className="flex-1 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col min-h-[500px] w-full">
-        {/* Header */}
         <div className="p-4 md:p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/50 rounded-t-2xl">
           <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
             <span className="bg-indigo-100 text-indigo-600 text-xs px-2 py-1 rounded-md">SCENE {activeSectionIdx + 1}</span>
@@ -166,58 +169,50 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
           <button 
              onClick={handleDownloadAudio}
              disabled={isDownloadingAudio}
-             className="flex items-center gap-2 text-xs font-medium bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+             className="flex items-center gap-2 text-xs font-medium bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px] justify-center"
           >
              {isDownloadingAudio ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Download className="w-3.5 h-3.5" />}
-             {isDownloadingAudio ? t.generatingAudio : t.downloadAudio}
+             {isDownloadingAudio ? (downloadProgress || t.generatingAudio) : t.downloadAudio}
           </button>
         </div>
 
-        {/* Lines Container */}
         <div className="p-4 md:p-6 space-y-6">
           {activeSection.lines.map((line, lIdx) => {
             const isPlaying = playingLine?.sectionIdx === activeSectionIdx && playingLine?.lineIdx === lIdx;
             const isRecording = recordingLine?.sectionIdx === activeSectionIdx && recordingLine?.lineIdx === lIdx;
             const hasRecording = !!recordedAudio[`${activeSectionIdx}-${lIdx}`];
-            const isUser = line.speaker === 'A'; // A is "User" (Right), B is "Partner" (Left)
+            const isUser = line.speaker === 'A'; 
             const translation = getTranslation(line.translation, language);
 
             return (
               <div key={lIdx} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[90%] md:max-w-[80%] flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
                   
-                  {/* Speaker Label */}
                   <div className="flex items-center gap-2 px-1">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                       {line.roleName || `${t.speaker} ${line.speaker}`}
                     </span>
                   </div>
 
-                  {/* Bubble - UPDATED VISUALS FOR USER (Light Blue instead of Solid Blue) */}
                   <div className={`p-4 md:p-5 rounded-2xl text-lg font-medium relative group transition-all duration-300 ${
                       isUser 
-                        ? 'bg-indigo-50 border border-indigo-100 text-slate-800 rounded-tr-sm' // Light Blue
-                        : 'bg-white border border-slate-100 text-slate-800 rounded-tl-sm shadow-sm' // White
+                        ? 'bg-indigo-50 border border-indigo-100 text-slate-800 rounded-tr-sm' 
+                        : 'bg-white border border-slate-100 text-slate-800 rounded-tl-sm shadow-sm' 
                     } ${isPlaying ? 'ring-4 ring-indigo-100' : ''}`}>
                     
-                    {/* Japanese Text */}
                     <div className="mb-1 leading-relaxed">{line.japanese}</div>
                     
-                    {/* Pronunciation Line */}
                     <div className={`text-sm font-normal mb-3 pb-2 border-b border-dashed ${
                       isUser ? 'text-indigo-600 border-indigo-200' : 'text-indigo-600 border-slate-100'
                     }`}>
                         {notation === 'kana' ? line.kana : line.romaji}
                     </div>
 
-                    {/* Translation */}
                     <p className={`text-sm font-normal text-slate-500`}>
                       {translation}
                     </p>
                     
-                    {/* Action Bar (Only visible on hover or active state) */}
                     <div className={`flex gap-2 mt-3 pt-1 justify-end opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity`}>
-                        {/* Listen */}
                         <button 
                           onClick={() => handlePlayLine(activeSectionIdx, lIdx, line.japanese, line.speaker)}
                           className={`p-1.5 rounded-full transition-all bg-white border border-slate-100 shadow-sm ${
@@ -225,10 +220,9 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
                           }`}
                           title={t.listen}
                         >
-                          {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                          {isPlaying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5" />}
                         </button>
 
-                        {/* Record */}
                         {!isRecording ? (
                           <button 
                             onClick={() => startRecording(activeSectionIdx, lIdx)}
@@ -249,7 +243,6 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation }
                           </button>
                         )}
 
-                        {/* Play Recording */}
                         {hasRecording && !isRecording && (
                           <button
                             onClick={() => playRecording(activeSectionIdx, lIdx)}

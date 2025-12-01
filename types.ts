@@ -1,12 +1,15 @@
 
 export type Language = 'zh' | 'en';
 export type Notation = 'kana' | 'romaji';
+export type VoiceEngine = 'system' | 'ai'; // New type
+
+export type ProgressCallback = (completed: number, total: number) => void;
 
 export interface VocabularyItem {
   term: string;
   kana: string;
   romaji: string;
-  meaning: string | { en: string; zh: string }; // Updated for bilingual support
+  meaning: string | { en: string; zh: string }; 
   type: string; 
 }
 
@@ -14,7 +17,7 @@ export interface ExpressionItem {
   phrase: string;
   kana: string;
   romaji: string;
-  meaning: string | { en: string; zh: string }; // Updated for bilingual support
+  meaning: string | { en: string; zh: string }; 
   nuance?: string; 
 }
 
@@ -24,7 +27,7 @@ export interface DialogueLine {
   japanese: string;
   kana: string;
   romaji: string;
-  translation: string | { en: string; zh: string }; // Updated for bilingual support
+  translation: string | { en: string; zh: string }; 
 }
 
 export interface DialogueSection {

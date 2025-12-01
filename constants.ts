@@ -201,7 +201,10 @@ export const UI_TEXT = {
     kana: '平假名',
     romaji: '罗马音',
     downloadAudio: '下载音频',
-    generatingAudio: '合成音频中...'
+    generatingAudio: '合成音频中...',
+    voiceEngine: '语音引擎',
+    engineSystem: '极速',
+    engineAi: 'AI音质'
   },
   en: {
     title: 'Nihongo Scene Master',
@@ -247,6 +250,9 @@ export const UI_TEXT = {
     kana: 'Kana',
     romaji: 'Romaji',
     downloadAudio: 'Download Audio',
-    generatingAudio: 'Generating Audio...'
+    generatingAudio: 'Generating Audio...',
+    voiceEngine: 'Voice Engine',
+    engineSystem: 'Fast',
+    engineAi: 'AI High-Q'
   }
 };

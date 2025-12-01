@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
-import { VocabularyItem, ExpressionItem, SavedItem, Notation, Language } from '../types';
-import { Volume2, Star } from 'lucide-react';
+import { VocabularyItem, ExpressionItem, SavedItem, Notation, Language, VoiceEngine } from '../types';
+import { Volume2, Star, Loader2 } from 'lucide-react';
 import { playTTS } from '../services/geminiService';
 
 interface Props {
@@ -9,16 +10,24 @@ interface Props {
   savedItems: SavedItem[];
   onToggleSave: (item: SavedItem) => void;
   notation: Notation;
-  language?: Language; // Add language prop for bilingual display
+  language?: Language; 
+  voiceEngine?: VoiceEngine;
 }
 
-// Helper to extract meaning string based on language
 const getMeaning = (meaning: string | { en: string; zh: string }, lang: Language) => {
   if (typeof meaning === 'string') return meaning;
   return meaning[lang] || meaning.en;
 };
 
-export const VocabularyList: React.FC<Props> = ({ items, type, savedItems, onToggleSave, notation, language = 'zh' }) => {
+export const VocabularyList: React.FC<Props> = ({ 
+  items, 
+  type, 
+  savedItems, 
+  onToggleSave, 
+  notation, 
+  language = 'zh',
+  voiceEngine = 'system'
+}) => {
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
 
   const handlePlay = async (text: string, index: number) => {
@@ -26,7 +35,7 @@ export const VocabularyList: React.FC<Props> = ({ items, type, savedItems, onTog
     
     setPlayingIndex(index);
     try {
-      await playTTS(text);
+      await playTTS(text, 'Puck', voiceEngine as VoiceEngine);
     } catch (err) {
       console.error("TTS Error", err);
     } finally {
@@ -45,7 +54,7 @@ export const VocabularyList: React.FC<Props> = ({ items, type, savedItems, onTog
   const handleToggle = (item: VocabularyItem | ExpressionItem) => {
     const term = type === 'vocab' ? (item as VocabularyItem).term : (item as ExpressionItem).phrase;
     onToggleSave({
-      id: term, // Simple ID using the term itself
+      id: term, 
       type,
       content: item,
       timestamp: Date.now()
@@ -58,12 +67,10 @@ export const VocabularyList: React.FC<Props> = ({ items, type, savedItems, onTog
         const isVocab = type === 'vocab';
         const mainText = isVocab ? (item as VocabularyItem).term : (item as ExpressionItem).phrase;
         
-        // Dynamic pronunciation display
         const kana = isVocab ? (item as VocabularyItem).kana : (item as ExpressionItem).kana;
         const romaji = isVocab ? (item as VocabularyItem).romaji : (item as ExpressionItem).romaji;
         const subText = notation === 'kana' ? kana : romaji;
         
-        // Explicitly cast language to Language to avoid TypeScript error where it might be inferred as string
         const meaning = getMeaning(item.meaning, language as Language);
         const tag = isVocab ? (item as VocabularyItem).type : null;
         const saved = isSaved(item);
@@ -92,9 +99,9 @@ export const VocabularyList: React.FC<Props> = ({ items, type, savedItems, onTog
               <p className="text-slate-600 text-sm">{meaning}</p>
               <button 
                 onClick={() => handlePlay(mainText, idx)}
-                className={`p-2 rounded-full ${playingIndex === idx ? 'bg-indigo-100 text-indigo-600 animate-pulse' : 'bg-slate-50 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}
+                className={`p-2 rounded-full transition-all ${playingIndex === idx ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-50 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}
               >
-                <Volume2 className="w-5 h-5" />
+                {playingIndex === idx ? <Loader2 className="w-5 h-5 animate-spin" /> : <Volume2 className="w-5 h-5" />}
               </button>
             </div>
           </div>

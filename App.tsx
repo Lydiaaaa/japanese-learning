@@ -1,13 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
 import { Home } from './components/Home';
 import { StudyView } from './components/StudyView';
 import { FavoritesView } from './components/FavoritesView';
 import { ScenariosListView } from './components/ScenariosListView';
 import { UserMenu } from './components/UserMenu';
-import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation } from './types';
+import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine } from './types';
 import { generateScenarioContent } from './services/geminiService';
 import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID } from './services/firebase';
-import { Loader2, AlertCircle, RefreshCw, Globe, Star, type LucideIcon, Type } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw, Globe, Star, type LucideIcon, Type, Zap } from 'lucide-react';
 import { UI_TEXT } from './constants';
 import { User } from 'firebase/auth';
 
@@ -23,10 +24,11 @@ export default function App() {
   // Global State
   const [language, setLanguage] = useState<Language>('zh');
   const [notation, setNotation] = useState<Notation>('kana');
+  const [voiceEngine, setVoiceEngine] = useState<VoiceEngine>('system'); // Default to System for speed
   
   // Auth State
   const [user, setUser] = useState<User | null>(null);
-  const [isSyncing, setIsSyncing] = useState(true); // Start true to check auth status
+  const [isSyncing, setIsSyncing] = useState(true); 
 
   // Data State
   const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
@@ -34,7 +36,7 @@ export default function App() {
 
   const t = UI_TEXT[language];
 
-  // Initialize Local Data on mount (before Auth is ready)
+  // Initialize Local Data
   useEffect(() => {
     try {
       const saved = localStorage.getItem('nihongo_favorites');
@@ -43,35 +45,34 @@ export default function App() {
       const history = localStorage.getItem('nihongo_scenarios');
       if (history) setScenarioHistory(JSON.parse(history));
 
-      // Restore notation preference
       const savedNotation = localStorage.getItem('nihongo_notation');
       if (savedNotation === 'kana' || savedNotation === 'romaji') {
         setNotation(savedNotation);
+      }
+      
+      const savedEngine = localStorage.getItem('nihongo_voice_engine');
+      if (savedEngine === 'system' || savedEngine === 'ai') {
+        setVoiceEngine(savedEngine);
       }
     } catch (e) {
       console.error("Failed to load local storage", e);
     }
   }, []);
 
-  // Auth Subscription & Sync
+  // Auth Subscription
   useEffect(() => {
     const unsubscribe = subscribeToAuth(async (currentUser) => {
-      // If we are already logged in as Guest, ignore null from auth listener (which implies logged out from firebase)
       if (user?.uid === GUEST_ID && !currentUser) {
         setIsSyncing(false);
         return;
       }
-
       setUser(currentUser);
-      
       if (currentUser) {
         setIsSyncing(true);
-        // Sync/Merge Local data with Cloud
         const syncedData = await syncUserData(currentUser.uid, {
           favorites: savedItems,
           history: scenarioHistory
         });
-        
         if (syncedData) {
           setSavedItems(syncedData.favorites);
           setScenarioHistory(syncedData.history);
@@ -81,13 +82,12 @@ export default function App() {
         setIsSyncing(false);
       }
     });
-
     return () => unsubscribe();
-  }, []); // Note: Dependency array is empty to run only on mount
+  }, []); 
 
-  // Persistence: Cloud if logged in, Local if not
+  // Persistence
   useEffect(() => {
-    if (isSyncing) return; // Don't save while syncing initial load
+    if (isSyncing) return; 
 
     if (user && user.uid !== GUEST_ID) {
       saveUserData(user.uid, { favorites: savedItems, history: scenarioHistory });
@@ -96,10 +96,10 @@ export default function App() {
       localStorage.setItem('nihongo_scenarios', JSON.stringify(scenarioHistory));
     }
     
-    // Save notation preference locally always
     localStorage.setItem('nihongo_notation', notation);
+    localStorage.setItem('nihongo_voice_engine', voiceEngine);
 
-  }, [savedItems, scenarioHistory, user, isSyncing, notation]);
+  }, [savedItems, scenarioHistory, user, isSyncing, notation, voiceEngine]);
 
   const toggleSavedItem = (item: SavedItem) => {
     setSavedItems(prev => {
@@ -135,7 +135,6 @@ export default function App() {
         }, ...prev];
       }
     });
-    
     return contentWithTime;
   };
 
@@ -248,8 +247,11 @@ export default function App() {
     setNotation(prev => prev === 'kana' ? 'romaji' : 'kana');
   };
 
+  const toggleVoiceEngine = () => {
+    setVoiceEngine(prev => prev === 'system' ? 'ai' : 'system');
+  };
+
   return (
-    // Changed: h-screen and overflow-hidden to handle scrolling internally
     <div className="h-screen flex flex-col bg-slate-50 text-slate-900 font-sans overflow-hidden">
       <nav className="bg-white border-b border-slate-100 px-6 py-4 flex justify-between items-center z-10 shadow-sm flex-shrink-0">
         <div 
@@ -260,7 +262,7 @@ export default function App() {
           <span className="font-bold text-lg text-slate-800 hidden md:inline">{t.navTitle}</span>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3">
           <button
             onClick={() => setViewState(ViewState.FAVORITES)}
             className="p-2 rounded-full hover:bg-slate-100 text-slate-600 flex items-center gap-1 transition-colors"
@@ -270,7 +272,20 @@ export default function App() {
             <span className="text-sm font-medium hidden sm:inline">{t.favorites}</span>
           </button>
 
-          {/* Notation Toggle */}
+          {/* Voice Engine Toggle */}
+          <button
+            onClick={toggleVoiceEngine}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
+              voiceEngine === 'system' 
+                ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100' 
+                : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+            }`}
+            title={t.voiceEngine}
+          >
+            <Zap className={`w-3.5 h-3.5 ${voiceEngine === 'system' ? 'fill-current' : ''}`} />
+            <span className="hidden sm:inline">{voiceEngine === 'system' ? t.engineSystem : t.engineAi}</span>
+          </button>
+
           <button
             onClick={toggleNotation}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors"
@@ -285,7 +300,7 @@ export default function App() {
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors"
           >
             <Globe className="w-4 h-4" />
-            {language === 'zh' ? 'English' : '中文'}
+            {language === 'zh' ? 'EN' : '中'}
           </button>
 
           <div className="h-6 w-px bg-slate-200 mx-1"></div>
@@ -314,6 +329,7 @@ export default function App() {
             language={language}
             onToggleSave={toggleSavedItem}
             notation={notation}
+            voiceEngine={voiceEngine}
           />
         )}
 
@@ -353,6 +369,7 @@ export default function App() {
             onRegenerate={handleRegenerate}
             onSelectVersion={handleVersionSelect}
             notation={notation}
+            voiceEngine={voiceEngine}
           />
         )}
 

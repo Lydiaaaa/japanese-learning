@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { SavedItem, Language, VocabularyItem, ExpressionItem, Notation } from '../types';
+import { SavedItem, Language, VocabularyItem, ExpressionItem, Notation, VoiceEngine } from '../types';
 import { VocabularyList } from './VocabularyList';
 import { ChevronLeft, Star } from 'lucide-react';
 import { UI_TEXT } from '../constants';
@@ -10,14 +11,19 @@ interface FavoritesViewProps {
   language: Language;
   onToggleSave: (item: SavedItem) => void;
   notation: Notation;
+  voiceEngine?: VoiceEngine;
 }
 
-export const FavoritesView: React.FC<FavoritesViewProps> = ({ savedItems, onBack, language, onToggleSave, notation }) => {
+export const FavoritesView: React.FC<FavoritesViewProps> = ({ 
+  savedItems, 
+  onBack, 
+  language, 
+  onToggleSave, 
+  notation,
+  voiceEngine = 'system'
+}) => {
   const t = UI_TEXT[language];
 
-  // Separate items for cleaner rendering if needed, though VocabularyList handles arrays
-  // For the Favorites view, we might want to mix them or separate them.
-  // Let's separate them visually.
   const vocabItems = savedItems.filter(i => i.type === 'vocab').map(i => i.content as VocabularyItem);
   const exprItems = savedItems.filter(i => i.type === 'expression').map(i => i.content as ExpressionItem);
 
@@ -52,13 +58,29 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ savedItems, onBack
               {vocabItems.length > 0 && (
                 <div>
                   <h2 className="text-lg font-bold text-slate-700 px-4 mb-4">{t.vocab}</h2>
-                  <VocabularyList items={vocabItems} type="vocab" savedItems={savedItems} onToggleSave={onToggleSave} notation={notation} language={language} />
+                  <VocabularyList 
+                    items={vocabItems} 
+                    type="vocab" 
+                    savedItems={savedItems} 
+                    onToggleSave={onToggleSave} 
+                    notation={notation} 
+                    language={language}
+                    voiceEngine={voiceEngine}
+                  />
                 </div>
               )}
               {exprItems.length > 0 && (
                 <div>
                   <h2 className="text-lg font-bold text-slate-700 px-4 mb-4">{t.expressions}</h2>
-                  <VocabularyList items={exprItems} type="expression" savedItems={savedItems} onToggleSave={onToggleSave} notation={notation} language={language} />
+                  <VocabularyList 
+                    items={exprItems} 
+                    type="expression" 
+                    savedItems={savedItems} 
+                    onToggleSave={onToggleSave} 
+                    notation={notation} 
+                    language={language}
+                    voiceEngine={voiceEngine}
+                  />
                 </div>
               )}
             </div>
