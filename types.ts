@@ -76,5 +76,6 @@ export enum ViewState {
   STUDY,
   FAVORITES,
   HISTORY,
-  ERROR
+  ERROR,
+  LOADING_SHARE
 }

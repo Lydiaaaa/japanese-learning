@@ -7,7 +7,7 @@ import { ScenariosListView } from './components/ScenariosListView';
 import { UserMenu } from './components/UserMenu';
 import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine } from './types';
 import { generateScenarioContent } from './services/geminiService';
-import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID } from './services/firebase';
+import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario } from './services/firebase';
 import { Loader2, AlertCircle, RefreshCw, Globe, Star, type LucideIcon, Type, Zap } from 'lucide-react';
 import { UI_TEXT } from './constants';
 import { User } from 'firebase/auth';
@@ -58,6 +58,65 @@ export default function App() {
       console.error("Failed to load local storage", e);
     }
   }, []);
+
+  // Check for Share URL on mount
+  useEffect(() => {
+    const checkShare = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const shareId = params.get('share');
+      
+      if (shareId) {
+        setViewState(ViewState.LOADING_SHARE);
+        const content = await getSharedScenario(shareId);
+        
+        if (content) {
+          // Save to history automatically
+          const timestamp = Date.now();
+          const contentWithTime = { ...content, timestamp }; // Ensure timestamp is set
+          
+          setScenarioHistory(prev => {
+            const existingIndex = prev.findIndex(item => item.id === content.scenarioName);
+            if (existingIndex >= 0) {
+              // Add to existing, avoiding dupes if exact same content logic is needed, 
+              // but here we just prepend this version
+              const updated = [...prev];
+              // Check if exact same version already exists to avoid noise? 
+              // For simplicity, we just push it as latest accessed
+              const versions = [contentWithTime, ...updated[existingIndex].versions].slice(0, 5);
+              updated[existingIndex] = {
+                ...updated[existingIndex],
+                versions,
+                lastAccessed: timestamp
+              };
+              return updated;
+            } else {
+              return [{
+                id: content.scenarioName,
+                name: content.scenarioName,
+                versions: [contentWithTime],
+                lastAccessed: timestamp
+              }, ...prev];
+            }
+          });
+
+          // Set active state
+          setCurrentScenarioId(content.scenarioName);
+          setCurrentContent(contentWithTime);
+          setCurrentVersions([contentWithTime]);
+          setCurrentVersionIndex(0);
+          setViewState(ViewState.STUDY);
+
+          // Clean URL
+          window.history.replaceState({}, '', window.location.pathname);
+        } else {
+          setErrorMsg(t.shareError);
+          setViewState(ViewState.ERROR);
+        }
+      }
+    };
+    
+    checkShare();
+  }, [t.shareError]);
 
   // Auth Subscription
   useEffect(() => {
@@ -229,6 +288,8 @@ export default function App() {
     setCurrentContent(null);
     setCurrentVersions([]);
     setCurrentScenarioId('');
+    // Clear URL params if going back to home
+    window.history.replaceState({}, '', window.location.pathname);
   };
 
   const handleRetry = () => {
@@ -354,6 +415,13 @@ export default function App() {
               {t.constructingDesc} <br/>
               <span className="font-semibold text-indigo-600">"{loadingScenarioName}"</span>
             </p>
+          </div>
+        )}
+
+        {viewState === ViewState.LOADING_SHARE && (
+          <div className="flex flex-col items-center justify-center h-full text-center px-6 overflow-y-auto">
+            <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
+            <h2 className="text-xl font-bold text-slate-800">{t.loadingShare}</h2>
           </div>
         )}
 

@@ -204,7 +204,13 @@ export const UI_TEXT = {
     generatingAudio: '合成音频中...',
     voiceEngine: '语音引擎',
     engineSystem: '极速',
-    engineAi: 'AI音质'
+    engineAi: 'AI音质',
+    share: '分享',
+    copyLink: '复制链接',
+    linkCopied: '链接已复制！',
+    creatingLink: '正在创建...',
+    loadingShare: '正在加载分享的场景...',
+    shareError: '无法加载分享的内容'
   },
   en: {
     title: 'Nihongo Scene Master',
@@ -253,6 +259,12 @@ export const UI_TEXT = {
     generatingAudio: 'Generating Audio...',
     voiceEngine: 'Voice Engine',
     engineSystem: 'Fast',
-    engineAi: 'AI High-Q'
+    engineAi: 'AI High-Q',
+    share: 'Share',
+    copyLink: 'Copy Link',
+    linkCopied: 'Link Copied!',
+    creatingLink: 'Creating...',
+    loadingShare: 'Loading shared scenario...',
+    shareError: 'Failed to load shared content'
   }
 };

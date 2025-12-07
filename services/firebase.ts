@@ -1,3 +1,4 @@
+
 import * as firebaseApp from 'firebase/app';
 import { 
   getAuth, 
@@ -11,9 +12,11 @@ import {
   getFirestore, 
   doc, 
   getDoc, 
-  setDoc
+  setDoc,
+  collection,
+  addDoc
 } from 'firebase/firestore';
-import { SavedItem, ScenarioHistoryItem } from '../types';
+import { SavedItem, ScenarioHistoryItem, ScenarioContent } from '../types';
 
 // ---------------------------------------------------------
 // IMPORTANT: REPLACE THIS WITH YOUR OWN FIREBASE CONFIG
@@ -210,5 +213,41 @@ export const saveUserData = async (uid: string, data: { favorites: SavedItem[], 
     await setDoc(doc(db, 'users', uid), data, { merge: true });
   } catch (e) {
     console.error("Save failed", e);
+  }
+};
+
+// --- SHARING FUNCTIONALITY ---
+
+// 1. Share a scenario (Upload snapshot)
+export const shareScenario = async (content: ScenarioContent): Promise<string | null> => {
+  if (!isConfigured) return null;
+  try {
+    const docRef = await addDoc(collection(db, 'shares'), {
+      ...content,
+      _sharedAt: Date.now()
+    });
+    return docRef.id;
+  } catch (e) {
+    console.error("Share failed", e);
+    return null;
+  }
+};
+
+// 2. Get a shared scenario (Download snapshot)
+export const getSharedScenario = async (id: string): Promise<ScenarioContent | null> => {
+  if (!isConfigured) return null;
+  try {
+    const docRef = doc(db, 'shares', id);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      // Remove metadata
+      const { _sharedAt, ...content } = data as any;
+      return content as ScenarioContent;
+    }
+    return null;
+  } catch (e) {
+    console.error("Get share failed", e);
+    return null;
   }
 };
