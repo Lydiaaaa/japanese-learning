@@ -361,7 +361,7 @@ export default function App() {
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors"
           >
             <Globe className="w-4 h-4" />
-            {language === 'zh' ? 'EN' : '中'}
+            {language === 'zh' ? 'CN' : 'EN'}
           </button>
 
           <div className="h-6 w-px bg-slate-200 mx-1"></div>
