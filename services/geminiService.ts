@@ -165,10 +165,39 @@ export const generateScenarioContent = async (scenario: string, language: Langua
   if (response.text) {
     const result = JSON.parse(response.text) as ScenarioContent;
     
-    // SANITIZATION: Ensure arrays exist to prevent UI crashes if AI returns incomplete JSON
+    // SANITIZATION: Deep clean to prevent UI crashes
+    
+    // 1. Ensure arrays exist
     if (!result.vocabulary) result.vocabulary = [];
     if (!result.expressions) result.expressions = [];
     if (!result.dialogues) result.dialogues = [];
+
+    // 2. Filter out corrupt items (missing essential fields)
+    result.vocabulary = result.vocabulary.filter(item => 
+      item && 
+      item.term && 
+      item.meaning && // Ensure meaning object exists
+      (typeof item.meaning === 'string' || (item.meaning.en || item.meaning.zh))
+    );
+
+    result.expressions = result.expressions.filter(item => 
+      item && 
+      item.phrase && 
+      item.meaning &&
+      (typeof item.meaning === 'string' || (item.meaning.en || item.meaning.zh))
+    );
+
+    result.dialogues = result.dialogues.filter(d => d && d.lines && Array.isArray(d.lines));
+    
+    // 3. Clean dialogue lines
+    result.dialogues.forEach(d => {
+       d.lines = d.lines.filter(l => 
+         l && 
+         l.japanese && 
+         l.translation &&
+         (typeof l.translation === 'string' || (l.translation.en || l.translation.zh))
+       );
+    });
 
     // FORCE the scenario name to match the requested input to prevent ID drift in history
     result.scenarioName = scenario;
@@ -385,6 +414,7 @@ export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck',
       const channelData = fullBuffer.getChannelData(0);
       let offset = 0;
       for (const chunk of collectedChunks) {
+        // cast to any to fix ts build error
         channelData.set(chunk as any, offset);
         offset += chunk.length;
       }

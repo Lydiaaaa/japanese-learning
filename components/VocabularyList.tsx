@@ -15,9 +15,10 @@ interface Props {
   onRetry?: () => void;
 }
 
-const getMeaning = (meaning: string | { en: string; zh: string }, lang: Language) => {
+const getMeaning = (meaning: string | { en: string; zh: string } | undefined, lang: Language) => {
+  if (!meaning) return '';
   if (typeof meaning === 'string') return meaning;
-  return meaning[lang] || meaning.en;
+  return meaning[lang] || meaning.en || '';
 };
 
 export const VocabularyList: React.FC<Props> = ({ 

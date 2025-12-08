@@ -13,9 +13,10 @@ interface Props {
   onRetry?: () => void;
 }
 
-const getTranslation = (trans: string | { en: string; zh: string }, lang: Language) => {
+const getTranslation = (trans: string | { en: string; zh: string } | undefined, lang: Language) => {
+  if (!trans) return '';
   if (typeof trans === 'string') return trans;
-  return trans[lang] || trans.en;
+  return trans[lang] || trans.en || '';
 };
 
 export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, voiceEngine = 'system', onRetry }) => {
