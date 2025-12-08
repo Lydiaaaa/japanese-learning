@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { DialogueSection, Language, Notation, VoiceEngine } from '../types';
-import { Play, Pause, Mic, Volume2, MessageSquare, Download, Loader2 } from 'lucide-react';
+import { Play, Pause, Mic, Volume2, MessageSquare, Download, Loader2, RefreshCw } from 'lucide-react';
 import { playTTS, generateDialogueAudioWithProgress } from '../services/geminiService';
 import { UI_TEXT } from '../constants';
 
@@ -10,6 +10,7 @@ interface Props {
   language: Language;
   notation: Notation;
   voiceEngine?: VoiceEngine;
+  onRetry?: () => void;
 }
 
 const getTranslation = (trans: string | { en: string; zh: string }, lang: Language) => {
@@ -17,7 +18,7 @@ const getTranslation = (trans: string | { en: string; zh: string }, lang: Langua
   return trans[lang] || trans.en;
 };
 
-export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, voiceEngine = 'system' }) => {
+export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, voiceEngine = 'system', onRetry }) => {
   const [activeSectionIdx, setActiveSectionIdx] = useState<number>(0);
   const [playingLine, setPlayingLine] = useState<{sectionIdx: number, lineIdx: number} | null>(null);
   const [recordingLine, setRecordingLine] = useState<{sectionIdx: number, lineIdx: number} | null>(null);
@@ -28,6 +29,24 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const t = UI_TEXT[language];
+
+  // Safety Guard for empty content
+  if (!sections || sections.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 bg-slate-50 rounded-2xl border border-slate-100 border-dashed text-slate-400 p-8">
+        <p className="mb-4">No dialogues available</p>
+        {onRetry && (
+          <button 
+            onClick={onRetry}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-sm font-medium text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-all"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Regenerate</span>
+          </button>
+        )}
+      </div>
+    );
+  }
 
   const handlePlayLine = async (sectionIdx: number, lineIdx: number, text: string, speaker: string) => {
     if (playingLine?.sectionIdx === sectionIdx && playingLine?.lineIdx === lineIdx) {
@@ -127,6 +146,7 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, 
 
   const activeSection = sections[activeSectionIdx];
 
+  // Double check to prevent crash if index is out of bounds
   if (!activeSection) return null;
 
   return (

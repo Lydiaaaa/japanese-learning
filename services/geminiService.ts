@@ -164,6 +164,12 @@ export const generateScenarioContent = async (scenario: string, language: Langua
 
   if (response.text) {
     const result = JSON.parse(response.text) as ScenarioContent;
+    
+    // SANITIZATION: Ensure arrays exist to prevent UI crashes if AI returns incomplete JSON
+    if (!result.vocabulary) result.vocabulary = [];
+    if (!result.expressions) result.expressions = [];
+    if (!result.dialogues) result.dialogues = [];
+
     // FORCE the scenario name to match the requested input to prevent ID drift in history
     result.scenarioName = scenario;
     return result;

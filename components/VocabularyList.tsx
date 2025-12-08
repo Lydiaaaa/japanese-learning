@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { VocabularyItem, ExpressionItem, SavedItem, Notation, Language, VoiceEngine } from '../types';
-import { Volume2, Star, Loader2 } from 'lucide-react';
+import { Volume2, Star, Loader2, RefreshCw } from 'lucide-react';
 import { playTTS } from '../services/geminiService';
 
 interface Props {
@@ -12,6 +12,7 @@ interface Props {
   notation: Notation;
   language?: Language; 
   voiceEngine?: VoiceEngine;
+  onRetry?: () => void;
 }
 
 const getMeaning = (meaning: string | { en: string; zh: string }, lang: Language) => {
@@ -26,9 +27,28 @@ export const VocabularyList: React.FC<Props> = ({
   onToggleSave, 
   notation, 
   language = 'zh',
-  voiceEngine = 'system'
+  voiceEngine = 'system',
+  onRetry
 }) => {
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
+
+  // Safety guard for empty items
+  if (!items || items.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-center p-8 text-slate-400 bg-slate-50 rounded-xl border border-slate-100 border-dashed">
+        <p className="mb-4">No items available.</p>
+        {onRetry && (
+          <button 
+            onClick={onRetry}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-sm font-medium text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-all"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Regenerate</span>
+          </button>
+        )}
+      </div>
+    );
+  }
 
   const handlePlay = async (text: string, index: number) => {
     if (playingIndex === index) return;

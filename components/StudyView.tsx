@@ -354,6 +354,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
               notation={notation}
               language={language}
               voiceEngine={voiceEngine}
+              onRetry={onRegenerate}
             />
           )}
           
@@ -366,6 +367,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
               notation={notation}
               language={language}
               voiceEngine={voiceEngine}
+              onRetry={onRegenerate}
             />
           )}
 
@@ -375,6 +377,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
               language={language} 
               notation={notation} 
               voiceEngine={voiceEngine}
+              onRetry={onRegenerate}
             />
           )}
         </div>
