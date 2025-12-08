@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { ScenarioContent, Language, SavedItem, Notation, VoiceEngine } from '../types';
-import { BookOpen, MessageCircle, GraduationCap, ChevronLeft, RotateCw, Clock, Download, Share2, Copy, Check, Loader2, ChevronDown } from 'lucide-react';
+import { BookOpen, MessageCircle, GraduationCap, ChevronLeft, RotateCw, Clock, Download, Share2, Copy, Check, Loader2, ChevronDown, Trash2 } from 'lucide-react';
 import { VocabularyList } from './VocabularyList';
 import { DialoguePlayer } from './DialoguePlayer';
 import { UI_TEXT } from '../constants';
@@ -17,6 +17,7 @@ interface StudyViewProps {
   onToggleSave: (item: SavedItem) => void;
   onRegenerate: () => void;
   onSelectVersion: (index: number) => void;
+  onDeleteVersion: () => void;
   notation: Notation;
   voiceEngine: VoiceEngine;
 }
@@ -38,6 +39,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
   onToggleSave,
   onRegenerate,
   onSelectVersion,
+  onDeleteVersion,
   notation,
   voiceEngine
 }) => {
@@ -267,6 +269,14 @@ export const StudyView: React.FC<StudyViewProps> = ({
                  <span className="hidden sm:inline">{t.regenerate}</span>
                </button>
 
+               <button
+                 onClick={onDeleteVersion}
+                 className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                 title={t.deleteVersion}
+               >
+                 <Trash2 className="w-4 h-4" />
+               </button>
+
                {/* Share Dropdown */}
                <div className="relative" ref={shareMenuRef}>
                  <button
@@ -344,7 +354,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto no-scrollbar w-full bg-slate-50"
       >
-        <div className={`mx-auto pb-10 pt-6 transition-all duration-300 ease-in-out ${activeTab === 'dialogue' ? 'max-w-6xl px-4' : 'max-w-6xl px-4 md:px-6'}`}>
+        <div className="mx-auto pb-10 pt-6 transition-all duration-300 ease-in-out max-w-6xl px-4">
           {activeTab === 'vocab' && (
             <VocabularyList 
               items={content.vocabulary} 

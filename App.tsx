@@ -204,6 +204,37 @@ export default function App() {
     }
   };
 
+  const handleDeleteVersion = () => {
+    if (!confirm(t.confirmDeleteVersion)) return;
+
+    // Remove from currentVersions state
+    const updatedVersions = currentVersions.filter((_, idx) => idx !== currentVersionIndex);
+
+    if (updatedVersions.length === 0) {
+      // No versions left, delete the history item entirely
+      setScenarioHistory(prev => prev.filter(item => item.id !== currentScenarioId));
+      
+      // Return to home
+      setViewState(ViewState.HOME);
+      setCurrentContent(null);
+      setCurrentVersions([]);
+      setCurrentScenarioId('');
+    } else {
+      // Update history
+      setScenarioHistory(prev => prev.map(item => {
+        if (item.id === currentScenarioId) {
+          return { ...item, versions: updatedVersions };
+        }
+        return item;
+      }));
+
+      // Update local view state to the first version (latest)
+      setCurrentVersions(updatedVersions);
+      setCurrentVersionIndex(0);
+      setCurrentContent(updatedVersions[0]);
+    }
+  };
+
   const handleScenarioSelect = async (scenarioName: string) => {
     setLoadingScenarioName(scenarioName);
     setCurrentScenarioId(scenarioName);
@@ -436,6 +467,7 @@ export default function App() {
             onToggleSave={toggleSavedItem}
             onRegenerate={handleRegenerate}
             onSelectVersion={handleVersionSelect}
+            onDeleteVersion={handleDeleteVersion}
             notation={notation}
             voiceEngine={voiceEngine}
           />
