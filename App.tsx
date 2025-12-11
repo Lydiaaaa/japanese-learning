@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Home } from './components/Home';
 import { StudyView } from './components/StudyView';
 import { FavoritesView } from './components/FavoritesView';
@@ -8,7 +8,7 @@ import { UserMenu } from './components/UserMenu';
 import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine } from './types';
 import { generateScenarioContent } from './services/geminiService';
 import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario } from './services/firebase';
-import { Loader2, AlertCircle, RefreshCw, Globe, Star, type LucideIcon, Type, Zap } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw, Globe, Star, type LucideIcon, Type, Zap, Settings, ChevronDown } from 'lucide-react';
 import { UI_TEXT } from './constants';
 import { User } from 'firebase/auth';
 
@@ -26,6 +26,10 @@ export default function App() {
   const [notation, setNotation] = useState<Notation>('kana');
   const [voiceEngine, setVoiceEngine] = useState<VoiceEngine>('system'); // Default to System for speed
   
+  // Settings Menu State
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
   // Auth State
   const [user, setUser] = useState<User | null>(null);
   const [isSyncing, setIsSyncing] = useState(true); 
@@ -59,6 +63,17 @@ export default function App() {
     }
   }, []);
 
+  // Handle outside click for Settings menu
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setIsSettingsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Check for Share URL on mount
   useEffect(() => {
     const checkShare = async () => {
@@ -77,11 +92,7 @@ export default function App() {
           setScenarioHistory(prev => {
             const existingIndex = prev.findIndex(item => item.id === content.scenarioName);
             if (existingIndex >= 0) {
-              // Add to existing, avoiding dupes if exact same content logic is needed, 
-              // but here we just prepend this version
               const updated = [...prev];
-              // Check if exact same version already exists to avoid noise? 
-              // For simplicity, we just push it as latest accessed
               const versions = [contentWithTime, ...updated[existingIndex].versions].slice(0, 5);
               updated[existingIndex] = {
                 ...updated[existingIndex],
@@ -345,55 +356,92 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 text-slate-900 font-sans overflow-hidden">
-      <nav className="bg-white border-b border-slate-100 px-6 py-4 flex justify-between items-center z-10 shadow-sm flex-shrink-0">
+      <nav className="bg-white border-b border-slate-100 px-4 py-3 md:px-6 md:py-4 flex justify-between items-center z-10 shadow-sm flex-shrink-0">
         <div 
           className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={() => setViewState(ViewState.HOME)}
         >
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">日</div>
+          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg flex-shrink-0">日</div>
           <span className="font-bold text-lg text-slate-800 hidden md:inline">{t.navTitle}</span>
         </div>
         
         <div className="flex items-center gap-2 md:gap-3">
           <button
             onClick={() => setViewState(ViewState.FAVORITES)}
-            className="p-2 rounded-full hover:bg-slate-100 text-slate-600 flex items-center gap-1 transition-colors"
+            className="p-2 rounded-full hover:bg-slate-100 text-slate-600 flex items-center gap-1 transition-colors flex-shrink-0"
             title={t.favorites}
           >
             <Star className="w-5 h-5" />
             <span className="text-sm font-medium hidden sm:inline">{t.favorites}</span>
           </button>
 
-          {/* Voice Engine Toggle */}
-          <button
-            onClick={toggleVoiceEngine}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
-              voiceEngine === 'system' 
-                ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100' 
-                : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
-            }`}
-            title={t.voiceEngine}
-          >
-            <Zap className={`w-3.5 h-3.5 ${voiceEngine === 'system' ? 'fill-current' : ''}`} />
-            <span className="hidden sm:inline">{voiceEngine === 'system' ? t.engineSystem : t.engineAi}</span>
-          </button>
+          {/* Settings Dropdown */}
+          <div className="relative" ref={settingsRef}>
+            <button
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              className={`flex items-center gap-1 p-2 rounded-lg text-slate-600 transition-colors ${isSettingsOpen ? 'bg-slate-100 text-indigo-600' : 'hover:bg-slate-50'}`}
+              title={t.settings}
+            >
+              <Settings className="w-5 h-5" />
+              <ChevronDown className={`w-3 h-3 transition-transform ${isSettingsOpen ? 'rotate-180' : ''} hidden sm:block`} />
+            </button>
+            
+            {isSettingsOpen && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-100 py-2 z-50">
+                 <div className="px-4 py-2 border-b border-slate-50 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                   {t.settings}
+                 </div>
+                 
+                 {/* Voice Engine Toggle */}
+                 <div className="px-2 py-1">
+                   <button
+                    onClick={toggleVoiceEngine}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+                   >
+                     <div className="flex items-center gap-2">
+                       <Zap className={`w-4 h-4 ${voiceEngine === 'system' ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
+                       <span>{t.voiceEngine}</span>
+                     </div>
+                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${voiceEngine === 'system' ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                        {voiceEngine === 'system' ? t.engineSystem : t.engineAi}
+                     </span>
+                   </button>
+                 </div>
 
-          <button
-            onClick={toggleNotation}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors"
-            title={t.notation}
-          >
-            <Type className="w-4 h-4" />
-            {notation === 'kana' ? 'あ' : 'A'}
-          </button>
+                 {/* Notation Toggle */}
+                 <div className="px-2 py-1">
+                   <button
+                    onClick={toggleNotation}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+                   >
+                     <div className="flex items-center gap-2">
+                       <Type className="w-4 h-4 text-slate-400" />
+                       <span>{t.notation}</span>
+                     </div>
+                     <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+                        {notation === 'kana' ? 'あ (Kana)' : 'A (Romaji)'}
+                     </span>
+                   </button>
+                 </div>
 
-          <button 
-            onClick={toggleLanguage}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors"
-          >
-            <Globe className="w-4 h-4" />
-            {language === 'zh' ? 'CN' : 'EN'}
-          </button>
+                 {/* Language Toggle */}
+                 <div className="px-2 py-1">
+                   <button
+                    onClick={toggleLanguage}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+                   >
+                     <div className="flex items-center gap-2">
+                       <Globe className="w-4 h-4 text-slate-400" />
+                       <span>{t.language}</span>
+                     </div>
+                     <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+                        {language === 'zh' ? '中文' : 'English'}
+                     </span>
+                   </button>
+                 </div>
+              </div>
+            )}
+          </div>
 
           <div className="h-6 w-px bg-slate-200 mx-1"></div>
           

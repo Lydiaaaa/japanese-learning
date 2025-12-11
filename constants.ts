@@ -212,7 +212,9 @@ export const UI_TEXT = {
     loadingShare: '正在加载分享的场景...',
     shareError: '无法加载分享的内容',
     deleteVersion: '删除此版本',
-    confirmDeleteVersion: '确定要删除当前版本的内容吗？无法撤销。'
+    confirmDeleteVersion: '确定要删除当前版本的内容吗？无法撤销。',
+    settings: '设置',
+    language: '语言'
   },
   en: {
     title: 'Nihongo Scene Master',
@@ -269,6 +271,8 @@ export const UI_TEXT = {
     loadingShare: 'Loading shared scenario...',
     shareError: 'Failed to load shared content',
     deleteVersion: 'Delete Version',
-    confirmDeleteVersion: 'Are you sure you want to delete this version? This cannot be undone.'
+    confirmDeleteVersion: 'Are you sure you want to delete this version? This cannot be undone.',
+    settings: 'Settings',
+    language: 'Language'
   }
 };
