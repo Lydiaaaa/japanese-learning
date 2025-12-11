@@ -56,8 +56,10 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, 
 
     setPlayingLine({ sectionIdx, lineIdx });
     try {
-      const voice = speaker === 'A' ? 'Puck' : 'Kore'; 
-      await playTTS(text, voice, voiceEngine as VoiceEngine);
+      const voice = speaker === 'A' ? 'Puck' : 'Kore';
+      // Get API Key from localStorage for TTS if available
+      const customKey = localStorage.getItem('nihongo_api_key') || undefined;
+      await playTTS(text, voice, voiceEngine as VoiceEngine, customKey);
     } catch (error) {
       console.error("Audio Playback Error", error);
     } finally {
@@ -77,13 +79,17 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, 
             text: line.japanese,
             speaker: line.speaker
         }));
+        
+        // Get API Key from localStorage for TTS if available
+        const customKey = localStorage.getItem('nihongo_api_key') || undefined;
 
         const wavBlob = await generateDialogueAudioWithProgress(
           linesToProcess,
           (completed, total) => {
              const pct = Math.round((completed / total) * 100);
              setDownloadProgress(`${pct}%`);
-          }
+          },
+          customKey
         );
         
         const url = URL.createObjectURL(wavBlob);

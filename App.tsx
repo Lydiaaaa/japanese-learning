@@ -1,13 +1,15 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Home } from './components/Home';
 import { StudyView } from './components/StudyView';
 import { FavoritesView } from './components/FavoritesView';
 import { ScenariosListView } from './components/ScenariosListView';
 import { UserMenu } from './components/UserMenu';
+import { ApiKeyModal } from './components/ApiKeyModal';
 import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine } from './types';
 import { generateScenarioContent } from './services/geminiService';
-import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario, User } from './services/firebase';
-import { Loader2, AlertCircle, RefreshCw, Globe, Star, Settings, Type, Zap, Check } from 'lucide-react';
+import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario, User, checkDailyQuota, incrementDailyQuota } from './services/firebase';
+import { Loader2, AlertCircle, RefreshCw, Globe, Star, Settings, Type, Zap, Key } from 'lucide-react';
 import { UI_TEXT } from './constants';
 
 export default function App() {
@@ -22,7 +24,9 @@ export default function App() {
   // Global State
   const [language, setLanguage] = useState<Language>('zh');
   const [notation, setNotation] = useState<Notation>('kana');
-  const [voiceEngine, setVoiceEngine] = useState<VoiceEngine>('system'); // Default to System for speed
+  const [voiceEngine, setVoiceEngine] = useState<VoiceEngine>('system');
+  const [customApiKey, setCustomApiKey] = useState<string | null>(null);
+  const [hasSetApiPreference, setHasSetApiPreference] = useState(false);
   
   // Auth State
   const [user, setUser] = useState<User | null>(null);
@@ -30,6 +34,8 @@ export default function App() {
 
   // UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
 
   // Data State
@@ -56,6 +62,14 @@ export default function App() {
       if (savedEngine === 'system' || savedEngine === 'ai') {
         setVoiceEngine(savedEngine);
       }
+
+      // Load API Key Preference
+      const storedKey = localStorage.getItem('nihongo_api_key');
+      const storedPref = localStorage.getItem('nihongo_api_pref_set');
+      
+      if (storedKey) setCustomApiKey(storedKey);
+      if (storedPref === 'true') setHasSetApiPreference(true);
+
     } catch (e) {
       console.error("Failed to load local storage", e);
     }
@@ -85,7 +99,7 @@ export default function App() {
         if (content) {
           // Save to history automatically
           const timestamp = Date.now();
-          const contentWithTime = { ...content, timestamp }; // Ensure timestamp is set
+          const contentWithTime = { ...content, timestamp }; 
           
           setScenarioHistory(prev => {
             const existingIndex = prev.findIndex(item => item.id === content.scenarioName);
@@ -108,14 +122,12 @@ export default function App() {
             }
           });
 
-          // Set active state
           setCurrentScenarioId(content.scenarioName);
           setCurrentContent(contentWithTime);
           setCurrentVersions([contentWithTime]);
           setCurrentVersionIndex(0);
           setViewState(ViewState.STUDY);
 
-          // Clean URL
           window.history.replaceState({}, '', window.location.pathname);
         } else {
           setErrorMsg(t.shareError);
@@ -215,34 +227,101 @@ export default function App() {
 
   const handleDeleteVersion = () => {
     if (!confirm(t.confirmDeleteVersion)) return;
-
-    // Remove from currentVersions state
     const updatedVersions = currentVersions.filter((_, idx) => idx !== currentVersionIndex);
-
     if (updatedVersions.length === 0) {
-      // No versions left, delete the history item entirely
       setScenarioHistory(prev => prev.filter(item => item.id !== currentScenarioId));
-      
-      // Return to home
       setViewState(ViewState.HOME);
       setCurrentContent(null);
       setCurrentVersions([]);
       setCurrentScenarioId('');
     } else {
-      // Update history
       setScenarioHistory(prev => prev.map(item => {
         if (item.id === currentScenarioId) {
           return { ...item, versions: updatedVersions };
         }
         return item;
       }));
-
-      // Update local view state to the first version (latest)
       setCurrentVersions(updatedVersions);
       setCurrentVersionIndex(0);
       setCurrentContent(updatedVersions[0]);
     }
   };
+
+  // --- API KEY & QUOTA LOGIC ---
+
+  const handleApiKeyConfirm = (key: string | null) => {
+    if (key) {
+      setCustomApiKey(key);
+      localStorage.setItem('nihongo_api_key', key);
+    } else {
+      setCustomApiKey(null);
+      localStorage.removeItem('nihongo_api_key');
+    }
+    
+    setHasSetApiPreference(true);
+    localStorage.setItem('nihongo_api_pref_set', 'true');
+    setShowApiKeyModal(false);
+    setIsQuotaExceeded(false);
+
+    // If we were trying to load a scenario, resume it
+    if (loadingScenarioName) {
+      executeScenarioGeneration(loadingScenarioName, key || undefined);
+    }
+  };
+
+  const checkQuotaAndGenerate = async (scenarioName: string) => {
+    // 1. If user has Custom Key, skip quota check
+    if (customApiKey) {
+      executeScenarioGeneration(scenarioName, customApiKey);
+      return;
+    }
+
+    // 2. If user hasn't set preference (First Time), show modal
+    if (!hasSetApiPreference) {
+      setShowApiKeyModal(true);
+      return;
+    }
+
+    // 3. Check Quota
+    const { allowed } = await checkDailyQuota(user);
+    if (allowed) {
+      executeScenarioGeneration(scenarioName);
+    } else {
+      setIsQuotaExceeded(true);
+      setShowApiKeyModal(true);
+    }
+  };
+
+  const executeScenarioGeneration = async (scenarioName: string, overrideKey?: string) => {
+    setViewState(ViewState.GENERATING);
+    try {
+      const content = await generateScenarioContent(scenarioName, language, overrideKey || customApiKey || undefined);
+      
+      // If we used the free quota (no custom key), increment usage
+      if (!overrideKey && !customApiKey) {
+        incrementDailyQuota(user);
+      }
+
+      const savedVersion = saveScenarioToHistory(scenarioName, content);
+      
+      setCurrentVersions(prev => {
+         // If regenerating, append to list. If new scenario, list is just one.
+         if (scenarioName === currentScenarioId) {
+             return [savedVersion, ...prev];
+         }
+         return [savedVersion];
+      });
+      setCurrentVersionIndex(0);
+      setCurrentContent(savedVersion);
+      setViewState(ViewState.STUDY);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(t.errorDesc);
+      setViewState(ViewState.ERROR);
+    }
+  };
+
+  // --- HANDLERS ---
 
   const handleScenarioSelect = async (scenarioName: string) => {
     setLoadingScenarioName(scenarioName);
@@ -251,6 +330,7 @@ export default function App() {
 
     const existingHistory = scenarioHistory.find(h => h.id === scenarioName);
     
+    // If exists and has content, open it (no quota used)
     if (existingHistory && existingHistory.versions.length > 0) {
       const latestVersion = existingHistory.versions[0];
       setCurrentVersions(existingHistory.versions);
@@ -263,44 +343,16 @@ export default function App() {
       
       setViewState(ViewState.STUDY);
     } else {
-      setViewState(ViewState.GENERATING);
-      try {
-        const content = await generateScenarioContent(scenarioName, language);
-        const savedVersion = saveScenarioToHistory(scenarioName, content);
-        
-        setCurrentVersions([savedVersion]);
-        setCurrentVersionIndex(0);
-        setCurrentContent(savedVersion);
-        setViewState(ViewState.STUDY);
-      } catch (err) {
-        console.error(err);
-        setErrorMsg(t.errorDesc);
-        setViewState(ViewState.ERROR);
-      }
+      // Logic for new generation
+      checkQuotaAndGenerate(scenarioName);
     }
   };
 
   const handleRegenerate = async () => {
     const scenarioIdToUse = currentScenarioId; 
     if (!scenarioIdToUse) return;
-    
-    setViewState(ViewState.GENERATING);
     setLoadingScenarioName(scenarioIdToUse);
-    
-    try {
-      const content = await generateScenarioContent(scenarioIdToUse, language);
-      const savedVersion = saveScenarioToHistory(scenarioIdToUse, content);
-      
-      setCurrentVersions(prev => [savedVersion, ...prev]);
-      setCurrentVersionIndex(0);
-      setCurrentContent(savedVersion);
-      
-      setViewState(ViewState.STUDY);
-    } catch (err) {
-       console.error(err);
-       setErrorMsg(t.errorDesc);
-       setViewState(ViewState.ERROR);
-    }
+    checkQuotaAndGenerate(scenarioIdToUse);
   };
 
   const handleVersionSelect = (index: number) => {
@@ -328,13 +380,12 @@ export default function App() {
     setCurrentContent(null);
     setCurrentVersions([]);
     setCurrentScenarioId('');
-    // Clear URL params if going back to home
     window.history.replaceState({}, '', window.location.pathname);
   };
 
   const handleRetry = () => {
     if (loadingScenarioName) {
-      handleScenarioSelect(loadingScenarioName);
+      checkQuotaAndGenerate(loadingScenarioName);
     } else {
       setViewState(ViewState.HOME);
     }
@@ -354,6 +405,16 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 text-slate-900 font-sans overflow-hidden">
+      
+      {/* API Key Modal */}
+      <ApiKeyModal 
+        isOpen={showApiKeyModal} 
+        onClose={() => setShowApiKeyModal(false)}
+        onConfirm={handleApiKeyConfirm}
+        language={language}
+        isQuotaExceeded={isQuotaExceeded}
+      />
+
       <nav className="bg-white border-b border-slate-100 px-4 md:px-6 py-4 flex justify-between items-center z-10 shadow-sm flex-shrink-0">
         <div 
           className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
@@ -394,7 +455,7 @@ export default function App() {
              </button>
 
              {isSettingsOpen && (
-               <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-100 py-2 z-50">
+               <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-xl shadow-lg border border-slate-100 py-2 z-50">
                   {/* Language Toggle */}
                   <button 
                     onClick={toggleLanguage}
@@ -440,6 +501,26 @@ export default function App() {
                          {voiceEngine === 'system' ? t.engineSystem : t.engineAi}
                        </span>
                      </div>
+                  </button>
+
+                  <div className="h-px bg-slate-100 my-1"></div>
+
+                  {/* API Key Config */}
+                  <button 
+                    onClick={() => {
+                      setIsSettingsOpen(false);
+                      setIsQuotaExceeded(false);
+                      setShowApiKeyModal(true);
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between group"
+                  >
+                     <div className="flex items-center gap-3 text-slate-700">
+                       <Key className="w-4 h-4 text-slate-400 group-hover:text-indigo-500" />
+                       <span className="text-sm">API Key</span>
+                     </div>
+                     <span className={`text-xs font-bold px-2 py-1 rounded ${customApiKey ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
+                       {customApiKey ? 'Custom' : 'Free'}
+                     </span>
                   </button>
                </div>
              )}

@@ -16,7 +16,9 @@ import {
   setDoc, 
   addDoc,
   collection,
-  Firestore 
+  Firestore,
+  updateDoc,
+  increment
 } from 'firebase/firestore';
 import { SavedItem, ScenarioHistoryItem, ScenarioContent } from '../types';
 
@@ -239,5 +241,77 @@ export const getSharedScenario = async (id: string): Promise<ScenarioContent | n
   } catch (e) {
     console.error("Get share failed", e);
     return null;
+  }
+};
+
+// --- DAILY QUOTA MANAGEMENT ---
+
+const DAILY_LIMIT = 5;
+
+// Helper to get a stable ID for the user (Auth UID or generated Guest ID)
+export const getStableUserId = (user: User | null): string => {
+  if (user && user.uid !== GUEST_ID) {
+    return user.uid;
+  }
+  
+  // For guests, use a persistent ID in localStorage
+  let guestId = localStorage.getItem('nihongo_device_id');
+  if (!guestId) {
+    guestId = 'guest_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+    localStorage.setItem('nihongo_device_id', guestId);
+  }
+  return guestId;
+};
+
+const getTodayDateString = () => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+export const checkDailyQuota = async (user: User | null): Promise<{ allowed: boolean; remaining: number }> => {
+  if (!isConfigured || !db) {
+    // If Firebase isn't configured, we default to allowing it (dev mode) or blocking it depending on policy.
+    // Here we allow it for safety in dev.
+    return { allowed: true, remaining: 999 };
+  }
+
+  const userId = getStableUserId(user);
+  const dateStr = getTodayDateString();
+  const docId = `${userId}_${dateStr}`;
+  const quotaRef = doc(db, 'daily_usage', docId);
+
+  try {
+    const snap = await getDoc(quotaRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      const count = data.count || 0;
+      return { 
+        allowed: count < DAILY_LIMIT, 
+        remaining: Math.max(0, DAILY_LIMIT - count) 
+      };
+    } else {
+      return { allowed: true, remaining: DAILY_LIMIT };
+    }
+  } catch (e) {
+    console.error("Error checking quota:", e);
+    return { allowed: true, remaining: 0 }; // Fail safe?
+  }
+};
+
+export const incrementDailyQuota = async (user: User | null) => {
+  if (!isConfigured || !db) return;
+
+  const userId = getStableUserId(user);
+  const dateStr = getTodayDateString();
+  const docId = `${userId}_${dateStr}`;
+  const quotaRef = doc(db, 'daily_usage', docId);
+
+  try {
+    await setDoc(quotaRef, {
+      count: increment(1),
+      updatedAt: Date.now()
+    }, { merge: true });
+  } catch (e) {
+    console.error("Error incrementing quota:", e);
   }
 };

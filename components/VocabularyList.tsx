@@ -56,7 +56,9 @@ export const VocabularyList: React.FC<Props> = ({
     
     setPlayingIndex(index);
     try {
-      await playTTS(text, 'Puck', voiceEngine as VoiceEngine);
+      // Get API Key from localStorage for TTS if available
+      const customKey = localStorage.getItem('nihongo_api_key') || undefined;
+      await playTTS(text, 'Puck', voiceEngine as VoiceEngine, customKey);
     } catch (err) {
       console.error("TTS Error", err);
     } finally {

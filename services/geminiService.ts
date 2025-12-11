@@ -3,7 +3,7 @@ import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ScenarioContent, Language, ProgressCallback, VoiceEngine } from "../types";
 
 // Helper to safely get the API Key in both Vite (production) and AI Studio (preview) environments
-const getApiKey = () => {
+const getSystemApiKey = () => {
   // @ts-ignore - Vite environment
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
     // @ts-ignore
@@ -13,14 +13,6 @@ const getApiKey = () => {
   return process.env.API_KEY;
 };
 
-const apiKey = getApiKey();
-if (!apiKey) {
-  console.error("API Key is missing! Please check your .env configuration.");
-}
-
-// Initialize Gemini directly
-const ai = new GoogleGenAI({ apiKey: apiKey || '' });
-
 // ---------------------------------------------------------------------------
 // AUDIO SYSTEM OPTIMIZATIONS
 // ---------------------------------------------------------------------------
@@ -29,7 +21,6 @@ const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 let audioContext: AudioContext | null = null;
 
 // 2. In-Memory Audio Cache (key: "VoiceName-Text" -> AudioBuffer)
-// This ensures 0ms latency for any repeated playback (especially vocabulary).
 const audioCache = new Map<string, AudioBuffer>();
 
 function getAudioContext(): AudioContext {
@@ -62,9 +53,15 @@ function processAudioChunk(base64: string): Float32Array {
   return float32Data;
 }
 
-export const generateScenarioContent = async (scenario: string, language: Language = 'zh'): Promise<ScenarioContent> => {
-  const currentKey = getApiKey();
-  if (!currentKey) throw new Error("API Key missing");
+// Helper to get AI instance with dynamic key
+const getAiInstance = (customKey?: string) => {
+  const key = customKey || getSystemApiKey();
+  if (!key) throw new Error("API Key is missing! Please check your configuration.");
+  return new GoogleGenAI({ apiKey: key });
+};
+
+export const generateScenarioContent = async (scenario: string, language: Language = 'zh', customApiKey?: string): Promise<ScenarioContent> => {
+  const ai = getAiInstance(customApiKey);
 
   // Updated Prompt to explicitly request full pronunciation data AND bilingual translations
   const prompt = `
@@ -207,10 +204,8 @@ export const generateScenarioContent = async (scenario: string, language: Langua
 };
 
 // Retrieve AudioBuffer for text (from Cache or Network)
-export const getAudioBuffer = async (text: string, voiceName: string): Promise<AudioBuffer> => {
-  const currentKey = getApiKey();
-  if (!currentKey) throw new Error("API Key missing");
-
+export const getAudioBuffer = async (text: string, voiceName: string, customApiKey?: string): Promise<AudioBuffer> => {
+  const ai = getAiInstance(customApiKey);
   const ctx = getAudioContext();
   const cacheKey = `${voiceName}-${text}`;
 
@@ -260,7 +255,8 @@ export const getAudioBuffer = async (text: string, voiceName: string): Promise<A
 // Generate Dialogue Audio with Concurrency Control and Progress Reporting
 export const generateDialogueAudioWithProgress = async (
     lines: {text: string, speaker: string}[],
-    onProgress?: ProgressCallback
+    onProgress?: ProgressCallback,
+    customApiKey?: string
 ): Promise<Blob> => {
    const ctx = getAudioContext();
    const buffers: AudioBuffer[] = [];
@@ -276,7 +272,7 @@ export const generateDialogueAudioWithProgress = async (
            let attempts = 0;
            while (attempts < 3) {
              try {
-               return await getAudioBuffer(line.text, voice);
+               return await getAudioBuffer(line.text, voice, customApiKey);
              } catch (e) {
                attempts++;
                await new Promise(r => setTimeout(r, 500 * attempts));
@@ -348,16 +344,19 @@ export const playSystemTTS = (text: string): Promise<void> => {
 };
 
 // Unified Play TTS function
-export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck', engine: VoiceEngine = 'system'): Promise<void> => {
+export const playTTS = async (
+  text: string, 
+  voiceName: 'Puck' | 'Kore' = 'Puck', 
+  engine: VoiceEngine = 'system',
+  customApiKey?: string
+): Promise<void> => {
   // If engine is system, use native browser TTS
   if (engine === 'system') {
     return playSystemTTS(text);
   }
 
   // Otherwise, use Gemini AI
-  const currentKey = getApiKey();
-  if (!currentKey) throw new Error("API Key missing");
-
+  const ai = getAiInstance(customApiKey);
   const ctx = getAudioContext();
   const cacheKey = `${voiceName}-${text}`;
 
