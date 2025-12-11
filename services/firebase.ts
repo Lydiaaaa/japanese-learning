@@ -1,21 +1,6 @@
-
-import * as firebaseApp from 'firebase/app';
-import { 
-  getAuth, 
-  GoogleAuthProvider, 
-  signInWithPopup, 
-  signOut as firebaseSignOut, 
-  onAuthStateChanged, 
-  User 
-} from 'firebase/auth';
-import { 
-  getFirestore, 
-  doc, 
-  getDoc, 
-  setDoc,
-  collection,
-  addDoc
-} from 'firebase/firestore';
+import firebase from 'firebase/app';
+import 'firebase/auth';
+import 'firebase/firestore';
 import { SavedItem, ScenarioHistoryItem, ScenarioContent } from '../types';
 
 // ---------------------------------------------------------
@@ -33,24 +18,29 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-// using a try-catch block to handle potential initialization errors gracefully
 let app;
-let auth: any;
-let db: any;
+let auth: firebase.auth.Auth;
+let db: firebase.firestore.Firestore;
 let isConfigured = false;
 
 try {
   // Basic check to see if user has replaced the placeholder
   if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY") {
-    // Use type casting to bypass potential type definition issues with initializeApp
-    app = (firebaseApp as any).initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
+    if (!firebase.apps.length) {
+      app = firebase.initializeApp(firebaseConfig);
+    } else {
+      app = firebase.app();
+    }
+    auth = firebase.auth();
+    db = firebase.firestore();
     isConfigured = true;
   }
 } catch (e) {
   console.error("Firebase initialization failed:", e);
 }
+
+// Export User type for consumption in components
+export type User = firebase.User;
 
 // Guest User Definition
 export const GUEST_ID = 'guest_user';
@@ -72,7 +62,7 @@ export const GUEST_USER = {
   toJSON: () => ({}),
   phoneNumber: null,
   providerId: 'guest'
-} as unknown as User;
+} as unknown as firebase.User;
 
 export const loginWithGoogle = async () => {
   if (!isConfigured) {
@@ -80,7 +70,6 @@ export const loginWithGoogle = async () => {
     return;
   }
 
-  // Protocol Check for the error you saw
   if (window.location.protocol === 'file:') {
     alert(
       "Firebase 登录无法在 file:// 协议下工作。\n\n" +
@@ -92,14 +81,12 @@ export const loginWithGoogle = async () => {
     return;
   }
 
-  const provider = new GoogleAuthProvider();
+  const provider = new firebase.auth.GoogleAuthProvider();
   try {
-    const result = await signInWithPopup(auth, provider);
+    const result = await auth.signInWithPopup(provider);
     return result;
   } catch (error: any) {
     console.error("Login failed", error);
-    
-    // Handle specific error codes for better user experience
     if (error?.code === 'auth/operation-not-supported-in-this-environment') {
        alert("登录失败：当前环境不支持（可能是非 HTTPS 或在受限的预览窗口中）。请尝试在标准浏览器窗口中使用 http://localhost 打开。");
     } else if (error?.code === 'auth/unauthorized-domain') {
@@ -111,7 +98,7 @@ export const loginWithGoogle = async () => {
          `2. 或者创建一个属于您自己的 Firebase 项目并更新 services/firebase.ts 中的配置。`
        );
     } else if (error?.code === 'auth/popup-closed-by-user') {
-       // User just closed the popup, no need to alert
+       // User just closed the popup
     } else {
        alert(`登录失败: ${error.message}`);
     }
@@ -120,22 +107,19 @@ export const loginWithGoogle = async () => {
 };
 
 export const logout = async () => {
-  // If it's just a local guest logout, we don't need to call firebase
   if (!isConfigured) return;
-  return firebaseSignOut(auth);
+  return auth.signOut();
 };
 
-export const subscribeToAuth = (callback: (user: User | null) => void) => {
+export const subscribeToAuth = (callback: (user: firebase.User | null) => void) => {
   if (!isConfigured) {
     callback(null);
     return () => {};
   }
-  return onAuthStateChanged(auth, callback);
+  return auth.onAuthStateChanged(callback);
 };
 
-// Merge Strategy:
-// 1. Favorites: Combine unique items by ID.
-// 2. History: Combine items by ID. If duplicate, keep the one with more versions or more recent access.
+// Merge Strategy
 const mergeData = (
   cloud: { favorites: SavedItem[], history: ScenarioHistoryItem[] }, 
   local: { favorites: SavedItem[], history: ScenarioHistoryItem[] }
@@ -155,7 +139,6 @@ const mergeData = (
     if (existingIdx === -1) {
       mergedHistory.push(localItem);
     } else {
-      // If exists, keep the one with more versions, or if equal, the more recent one
       const existing = mergedHistory[existingIdx];
       if (localItem.versions.length > existing.versions.length || localItem.lastAccessed > existing.lastAccessed) {
         mergedHistory[existingIdx] = localItem;
@@ -163,39 +146,34 @@ const mergeData = (
     }
   });
   
-  // Sort history by recency
   mergedHistory.sort((a, b) => b.lastAccessed - a.lastAccessed);
 
   return { favorites: mergedFavorites, history: mergedHistory };
 };
 
 export const syncUserData = async (uid: string, localData: { favorites: SavedItem[], history: ScenarioHistoryItem[] }) => {
-   // Skip cloud sync for guest user
    if (uid === GUEST_ID) {
      return localData;
    }
 
    if (!isConfigured) return null;
    
-   const userRef = doc(db, 'users', uid);
+   const userRef = db.collection('users').doc(uid);
    
    try {
-     const snap = await getDoc(userRef);
+     const snap = await userRef.get();
      
-     if (snap.exists()) {
+     if (snap.exists) {
        const cloudData = snap.data() as { favorites: SavedItem[], history: ScenarioHistoryItem[] };
-       // Merge Cloud + Local
        const merged = mergeData(
          { favorites: cloudData.favorites || [], history: cloudData.history || [] }, 
          localData
        );
        
-       // Update Cloud with Merged State
-       await setDoc(userRef, merged, { merge: true });
+       await userRef.set(merged, { merge: true });
        return merged;
      } else {
-       // First login, upload local data
-       await setDoc(userRef, localData);
+       await userRef.set(localData);
        return localData;
      }
    } catch (e) {
@@ -205,12 +183,10 @@ export const syncUserData = async (uid: string, localData: { favorites: SavedIte
 };
 
 export const saveUserData = async (uid: string, data: { favorites: SavedItem[], history: ScenarioHistoryItem[] }) => {
-  // Skip cloud save for guest user
   if (uid === GUEST_ID) return;
-
   if (!isConfigured) return;
   try {
-    await setDoc(doc(db, 'users', uid), data, { merge: true });
+    await db.collection('users').doc(uid).set(data, { merge: true });
   } catch (e) {
     console.error("Save failed", e);
   }
@@ -218,11 +194,10 @@ export const saveUserData = async (uid: string, data: { favorites: SavedItem[], 
 
 // --- SHARING FUNCTIONALITY ---
 
-// 1. Share a scenario (Upload snapshot)
 export const shareScenario = async (content: ScenarioContent): Promise<string | null> => {
   if (!isConfigured) return null;
   try {
-    const docRef = await addDoc(collection(db, 'shares'), {
+    const docRef = await db.collection('shares').add({
       ...content,
       _sharedAt: Date.now()
     });
@@ -233,15 +208,13 @@ export const shareScenario = async (content: ScenarioContent): Promise<string | 
   }
 };
 
-// 2. Get a shared scenario (Download snapshot)
 export const getSharedScenario = async (id: string): Promise<ScenarioContent | null> => {
   if (!isConfigured) return null;
   try {
-    const docRef = doc(db, 'shares', id);
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
+    const docRef = db.collection('shares').doc(id);
+    const snap = await docRef.get();
+    if (snap.exists) {
       const data = snap.data();
-      // Remove metadata
       const { _sharedAt, ...content } = data as any;
       return content as ScenarioContent;
     }

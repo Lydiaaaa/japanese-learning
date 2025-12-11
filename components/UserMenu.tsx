@@ -1,9 +1,8 @@
 import React from 'react';
-import { User } from 'firebase/auth';
 import { LogIn, LogOut, User as UserIcon, Loader2 } from 'lucide-react';
 import { Language } from '../types';
 import { UI_TEXT } from '../constants';
-import { loginWithGoogle, logout, GUEST_ID } from '../services/firebase';
+import { loginWithGoogle, logout, GUEST_ID, User } from '../services/firebase';
 
 interface UserMenuProps {
   user: User | null;
@@ -27,7 +26,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ user, isSyncing, language })
     return (
       <div className="flex items-center gap-2 text-slate-400 px-3 py-1.5">
         <Loader2 className="w-4 h-4 animate-spin" />
-        <span className="text-sm">{t.syncing}</span>
+        <span className="text-sm hidden sm:inline">{t.syncing}</span>
       </div>
     );
   }
@@ -40,7 +39,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ user, isSyncing, language })
           className="flex items-center gap-1 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200"
         >
           <LogIn className="w-4 h-4" />
-          {t.login}
+          <span className="hidden sm:inline">{t.login}</span>
         </button>
       </div>
     );
@@ -52,16 +51,16 @@ export const UserMenu: React.FC<UserMenuProps> = ({ user, isSyncing, language })
     <div className="flex items-center gap-3">
       <div className="flex items-center gap-2">
         {isGuest ? (
-           <div className="flex items-center gap-2 bg-amber-50 text-amber-700 px-2 py-1 rounded-lg border border-amber-100">
+           <div className="flex items-center gap-2 bg-amber-50 text-amber-700 px-2 py-1 rounded-lg border border-amber-100 flex-shrink-0">
              <UserIcon className="w-4 h-4" />
-             <span className="text-sm font-medium">访客</span>
+             <span className="text-sm font-medium hidden sm:inline">访客</span>
            </div>
         ) : (
           <>
             {user.photoURL ? (
-              <img src={user.photoURL} alt={user.displayName || "User"} className="w-8 h-8 rounded-full border border-slate-200" />
+              <img src={user.photoURL} alt={user.displayName || "User"} className="w-8 h-8 rounded-full border border-slate-200 flex-shrink-0 object-cover" />
             ) : (
-              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
+              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
                 <UserIcon className="w-4 h-4" />
               </div>
             )}
@@ -71,7 +70,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ user, isSyncing, language })
       
       <button
         onClick={handleLogout}
-        className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors"
+        className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors flex-shrink-0"
         title={t.logout}
       >
         <LogOut className="w-4 h-4" />
