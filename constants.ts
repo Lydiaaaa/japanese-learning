@@ -214,7 +214,21 @@ export const UI_TEXT = {
     deleteVersion: '删除此版本',
     confirmDeleteVersion: '确定要删除当前版本的内容吗？无法撤销。',
     settings: '设置',
-    language: '语言'
+    language: '语言',
+    apiConfig: 'API 配置',
+    apiSetup: {
+      title: 'API 配置',
+      description: '为了生成日语学习内容，我们需要连接到 Gemini AI。',
+      communityOption: '使用社区额度 (免费)',
+      communityDesc: '直接使用，可能受速率限制，生成较慢。',
+      customOption: '使用个人 API Key (推荐)',
+      customDesc: '使用您自己的 Gemini API Key。速度更快，隐私更好。',
+      inputLabel: '请输入您的 Gemini API Key:',
+      getKeyLink: '如何获取 Key?',
+      save: '保存配置',
+      privacyNote: '您的 Key 仅保存在浏览器本地，绝不会上传到服务器。',
+      changeLater: '您随时可以在右上角的“设置”菜单中修改此配置。'
+    }
   },
   en: {
     title: 'Nihongo Scene Master',
@@ -273,6 +287,20 @@ export const UI_TEXT = {
     deleteVersion: 'Delete Version',
     confirmDeleteVersion: 'Are you sure you want to delete this version? This cannot be undone.',
     settings: 'Settings',
-    language: 'Language'
+    language: 'Language',
+    apiConfig: 'API Config',
+    apiSetup: {
+      title: 'API Configuration',
+      description: 'To generate content, we need to connect to Gemini AI.',
+      communityOption: 'Use Community Quota (Free)',
+      communityDesc: 'Ready to use. May be slower due to rate limits.',
+      customOption: 'Use Personal API Key (Recommended)',
+      customDesc: 'Use your own Gemini API Key. Faster and more private.',
+      inputLabel: 'Enter your Gemini API Key:',
+      getKeyLink: 'Get API Key',
+      save: 'Save Configuration',
+      privacyNote: 'Your Key is stored locally in your browser and never sent to our servers.',
+      changeLater: 'You can change this anytime in the "Settings" menu.'
+    }
   }
 };

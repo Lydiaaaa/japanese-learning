@@ -5,10 +5,11 @@ import { StudyView } from './components/StudyView';
 import { FavoritesView } from './components/FavoritesView';
 import { ScenariosListView } from './components/ScenariosListView';
 import { UserMenu } from './components/UserMenu';
-import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine } from './types';
+import { ApiSetupModal } from './components/ApiSetupModal';
+import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine, ApiConfig } from './types';
 import { generateScenarioContent } from './services/geminiService';
 import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario } from './services/firebase';
-import { Loader2, AlertCircle, RefreshCw, Globe, Star, type LucideIcon, Type, Zap, Settings, ChevronDown } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw, Globe, Star, type LucideIcon, Type, Zap, Settings, ChevronDown, Key } from 'lucide-react';
 import { UI_TEXT } from './constants';
 import { User } from 'firebase/auth';
 
@@ -25,9 +26,11 @@ export default function App() {
   const [language, setLanguage] = useState<Language>('zh');
   const [notation, setNotation] = useState<Notation>('kana');
   const [voiceEngine, setVoiceEngine] = useState<VoiceEngine>('system'); // Default to System for speed
+  const [apiConfig, setApiConfig] = useState<ApiConfig | null>(null);
   
   // Settings Menu State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isApiModalOpen, setIsApiModalOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
 
   // Auth State
@@ -37,6 +40,9 @@ export default function App() {
   // Data State
   const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
   const [scenarioHistory, setScenarioHistory] = useState<ScenarioHistoryItem[]>([]);
+
+  // Pending scenario to generate after API setup
+  const [pendingScenario, setPendingScenario] = useState<string | null>(null);
 
   const t = UI_TEXT[language];
 
@@ -57,6 +63,11 @@ export default function App() {
       const savedEngine = localStorage.getItem('nihongo_voice_engine');
       if (savedEngine === 'system' || savedEngine === 'ai') {
         setVoiceEngine(savedEngine);
+      }
+
+      const savedApiConfig = localStorage.getItem('nihongo_api_config');
+      if (savedApiConfig) {
+        setApiConfig(JSON.parse(savedApiConfig));
       }
     } catch (e) {
       console.error("Failed to load local storage", e);
@@ -168,8 +179,11 @@ export default function App() {
     
     localStorage.setItem('nihongo_notation', notation);
     localStorage.setItem('nihongo_voice_engine', voiceEngine);
+    if (apiConfig) {
+      localStorage.setItem('nihongo_api_config', JSON.stringify(apiConfig));
+    }
 
-  }, [savedItems, scenarioHistory, user, isSyncing, notation, voiceEngine]);
+  }, [savedItems, scenarioHistory, user, isSyncing, notation, voiceEngine, apiConfig]);
 
   const toggleSavedItem = (item: SavedItem) => {
     setSavedItems(prev => {
@@ -246,6 +260,24 @@ export default function App() {
     }
   };
 
+  const executeScenarioGeneration = async (scenarioName: string) => {
+    setViewState(ViewState.GENERATING);
+    try {
+      const customKey = apiConfig?.mode === 'custom' ? apiConfig.apiKey : undefined;
+      const content = await generateScenarioContent(scenarioName, language, customKey);
+      const savedVersion = saveScenarioToHistory(scenarioName, content);
+      
+      setCurrentVersions([savedVersion]);
+      setCurrentVersionIndex(0);
+      setCurrentContent(savedVersion);
+      setViewState(ViewState.STUDY);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(t.errorDesc);
+      setViewState(ViewState.ERROR);
+    }
+  };
+
   const handleScenarioSelect = async (scenarioName: string) => {
     setLoadingScenarioName(scenarioName);
     setCurrentScenarioId(scenarioName);
@@ -265,20 +297,24 @@ export default function App() {
       
       setViewState(ViewState.STUDY);
     } else {
-      setViewState(ViewState.GENERATING);
-      try {
-        const content = await generateScenarioContent(scenarioName, language);
-        const savedVersion = saveScenarioToHistory(scenarioName, content);
-        
-        setCurrentVersions([savedVersion]);
-        setCurrentVersionIndex(0);
-        setCurrentContent(savedVersion);
-        setViewState(ViewState.STUDY);
-      } catch (err) {
-        console.error(err);
-        setErrorMsg(t.errorDesc);
-        setViewState(ViewState.ERROR);
+      // Check API Config before generating
+      if (!apiConfig) {
+        setPendingScenario(scenarioName);
+        setIsApiModalOpen(true);
+      } else {
+        executeScenarioGeneration(scenarioName);
       }
+    }
+  };
+
+  const handleApiSave = (config: ApiConfig) => {
+    setApiConfig(config);
+    if (pendingScenario) {
+      // Slight delay to allow modal close animation
+      setTimeout(() => {
+        executeScenarioGeneration(pendingScenario);
+        setPendingScenario(null);
+      }, 500);
     }
   };
 
@@ -286,11 +322,19 @@ export default function App() {
     const scenarioIdToUse = currentScenarioId; 
     if (!scenarioIdToUse) return;
     
+    // Check API Config before regenerating
+    if (!apiConfig) {
+       // Should not happen usually since we checked at start, but good for safety
+       setIsApiModalOpen(true);
+       return;
+    }
+
     setViewState(ViewState.GENERATING);
     setLoadingScenarioName(scenarioIdToUse);
     
     try {
-      const content = await generateScenarioContent(scenarioIdToUse, language);
+      const customKey = apiConfig?.mode === 'custom' ? apiConfig.apiKey : undefined;
+      const content = await generateScenarioContent(scenarioIdToUse, language, customKey);
       const savedVersion = saveScenarioToHistory(scenarioIdToUse, content);
       
       setCurrentVersions(prev => [savedVersion, ...prev]);
@@ -353,6 +397,8 @@ export default function App() {
   const toggleVoiceEngine = () => {
     setVoiceEngine(prev => prev === 'system' ? 'ai' : 'system');
   };
+
+  const userApiKey = apiConfig?.mode === 'custom' ? apiConfig.apiKey : undefined;
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 text-slate-900 font-sans overflow-hidden">
@@ -435,7 +481,27 @@ export default function App() {
                        <span>{t.language}</span>
                      </div>
                      <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
-                        {language === 'zh' ? '中文' : 'English'}
+                        {language === 'zh' ? 'CN' : 'EN'}
+                     </span>
+                   </button>
+                 </div>
+
+                 {/* API Config Trigger */}
+                 <div className="h-px bg-slate-100 my-1"></div>
+                 <div className="px-2 py-1">
+                   <button
+                    onClick={() => {
+                        setIsSettingsOpen(false);
+                        setIsApiModalOpen(true);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+                   >
+                     <div className="flex items-center gap-2">
+                       <Key className="w-4 h-4 text-slate-400" />
+                       <span>{t.apiConfig}</span>
+                     </div>
+                     <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+                        {apiConfig?.mode === 'custom' ? 'Custom' : 'Default'}
                      </span>
                    </button>
                  </div>
@@ -454,6 +520,17 @@ export default function App() {
       </nav>
 
       <main className="flex-1 overflow-hidden relative w-full">
+        <ApiSetupModal 
+            isOpen={isApiModalOpen}
+            onClose={() => {
+                setIsApiModalOpen(false);
+                setPendingScenario(null);
+            }}
+            onSave={handleApiSave}
+            language={language}
+            initialConfig={apiConfig}
+        />
+
         {viewState === ViewState.HOME && (
           <Home 
             onScenarioSelect={handleScenarioSelect} 
@@ -470,6 +547,7 @@ export default function App() {
             onToggleSave={toggleSavedItem}
             notation={notation}
             voiceEngine={voiceEngine}
+            userApiKey={userApiKey}
           />
         )}
 
@@ -518,6 +596,7 @@ export default function App() {
             onDeleteVersion={handleDeleteVersion}
             notation={notation}
             voiceEngine={voiceEngine}
+            userApiKey={userApiKey}
           />
         )}
 

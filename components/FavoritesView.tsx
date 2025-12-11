@@ -12,6 +12,7 @@ interface FavoritesViewProps {
   onToggleSave: (item: SavedItem) => void;
   notation: Notation;
   voiceEngine?: VoiceEngine;
+  userApiKey?: string;
 }
 
 export const FavoritesView: React.FC<FavoritesViewProps> = ({ 
@@ -20,7 +21,8 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
   language, 
   onToggleSave, 
   notation,
-  voiceEngine = 'system'
+  voiceEngine = 'system',
+  userApiKey
 }) => {
   const t = UI_TEXT[language];
 
@@ -66,6 +68,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
                     notation={notation} 
                     language={language}
                     voiceEngine={voiceEngine}
+                    userApiKey={userApiKey}
                   />
                 </div>
               )}
@@ -80,6 +83,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
                     notation={notation} 
                     language={language}
                     voiceEngine={voiceEngine}
+                    userApiKey={userApiKey}
                   />
                 </div>
               )}
