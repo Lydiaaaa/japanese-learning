@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { CATEGORIES, UI_TEXT } from '../constants';
 import { ArrowRight, Building, Plane, Utensils, Briefcase, Search, History, RefreshCw } from 'lucide-react';
@@ -68,28 +67,28 @@ export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, lan
 
   return (
     <div className="h-full overflow-y-auto no-scrollbar">
-      <div className="max-w-4xl mx-auto p-4 md:p-6">
-        <header className="mb-8 md:mb-10 text-center">
-          <h1 className="text-3xl md:text-4xl font-bold text-slate-800 mb-2">{t.title}</h1>
-          <p className="text-slate-500 text-base md:text-lg">{t.subtitle}</p>
+      <div className="max-w-4xl mx-auto p-6">
+        <header className="mb-10 text-center">
+          <h1 className="text-4xl font-bold text-slate-800 mb-2">{t.title}</h1>
+          <p className="text-slate-500 text-lg">{t.subtitle}</p>
         </header>
 
-        {/* Custom Input Hero - UPDATED UI: Stacked on mobile, row on desktop */}
-        <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 mb-8 md:mb-10">
+        {/* Custom Input Hero - UPDATED UI: Light gray background, no border */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-10">
           <label className="block text-sm font-medium text-slate-700 mb-2">
             {t.customLabel}
           </label>
-          <form onSubmit={handleCustomSubmit} className="flex flex-col sm:flex-row gap-3">
+          <form onSubmit={handleCustomSubmit} className="flex gap-2">
             <input
               type="text"
               value={customInput}
               onChange={(e) => setCustomInput(e.target.value)}
               placeholder={t.customPlaceholder}
-              className="flex-1 p-3 md:p-4 rounded-xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-200 outline-none transition-all placeholder:text-slate-400 text-slate-700"
+              className="flex-1 p-4 rounded-xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-200 outline-none transition-all placeholder:text-slate-400 text-slate-700"
             />
             <button
               type="submit"
-              className="bg-indigo-600 text-white px-6 py-3 md:py-4 rounded-xl font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 whitespace-nowrap shadow-sm shadow-indigo-200 w-full sm:w-auto"
+              className="bg-indigo-600 text-white px-6 py-4 rounded-xl font-medium hover:bg-indigo-700 transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm shadow-indigo-200"
             >
               {t.start}
               <ArrowRight className="w-4 h-4" />
@@ -97,7 +96,7 @@ export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, lan
           </form>
         </div>
 
-        <div className="flex justify-end mb-4 md:mb-6">
+        <div className="flex justify-end mb-6">
           <button 
             onClick={onViewHistory}
             className="text-slate-500 hover:text-indigo-600 text-sm font-medium flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white transition-all"
@@ -107,14 +106,14 @@ export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, lan
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 pb-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-10">
           {CATEGORIES.map((cat) => {
             const Icon = iconMap[cat.icon] || Search;
             const currentItems = visiblePresets[cat.id] || [];
 
             return (
               <div key={cat.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow">
-                <div className="p-4 md:p-5 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+                <div className="p-5 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
                       <Icon className="w-5 h-5" />
@@ -139,10 +138,10 @@ export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, lan
                       <button
                         key={idx}
                         onClick={() => onScenarioSelect(preset)}
-                        className="w-full text-left px-3 py-2.5 md:px-4 md:py-3 rounded-lg hover:bg-slate-50 text-slate-600 hover:text-indigo-600 text-sm transition-colors flex items-center justify-between group"
+                        className="w-full text-left px-4 py-3 rounded-lg hover:bg-slate-50 text-slate-600 hover:text-indigo-600 text-sm transition-colors flex items-center justify-between group"
                       >
-                        <span className="truncate mr-2">{preset}</span>
-                        <ArrowRight className="w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        {preset}
+                        <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </button>
                     ))
                   ) : (

@@ -5,11 +5,6 @@ export type VoiceEngine = 'system' | 'ai'; // New type
 
 export type ProgressCallback = (completed: number, total: number) => void;
 
-export interface ApiConfig {
-  mode: 'community' | 'custom';
-  apiKey?: string;
-}
-
 export interface VocabularyItem {
   term: string;
   kana: string;

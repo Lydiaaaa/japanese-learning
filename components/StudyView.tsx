@@ -20,7 +20,6 @@ interface StudyViewProps {
   onDeleteVersion: () => void;
   notation: Notation;
   voiceEngine: VoiceEngine;
-  userApiKey?: string;
 }
 
 type Tab = 'vocab' | 'expressions' | 'dialogue';
@@ -42,8 +41,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
   onSelectVersion,
   onDeleteVersion,
   notation,
-  voiceEngine,
-  userApiKey
+  voiceEngine
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('vocab');
   const scrollContainerRef = useRef<HTMLDivElement>(null); 
@@ -367,7 +365,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
               language={language}
               voiceEngine={voiceEngine}
               onRetry={onRegenerate}
-              userApiKey={userApiKey}
             />
           )}
           
@@ -381,7 +378,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
               language={language}
               voiceEngine={voiceEngine}
               onRetry={onRegenerate}
-              userApiKey={userApiKey}
             />
           )}
 
@@ -392,7 +388,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
               notation={notation} 
               voiceEngine={voiceEngine}
               onRetry={onRegenerate}
-              userApiKey={userApiKey}
             />
           )}
         </div>

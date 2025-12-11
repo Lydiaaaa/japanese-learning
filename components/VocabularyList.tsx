@@ -13,7 +13,6 @@ interface Props {
   language?: Language; 
   voiceEngine?: VoiceEngine;
   onRetry?: () => void;
-  userApiKey?: string;
 }
 
 const getMeaning = (meaning: string | { en: string; zh: string } | undefined, lang: Language) => {
@@ -30,8 +29,7 @@ export const VocabularyList: React.FC<Props> = ({
   notation, 
   language = 'zh',
   voiceEngine = 'system',
-  onRetry,
-  userApiKey
+  onRetry
 }) => {
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
 
@@ -58,7 +56,7 @@ export const VocabularyList: React.FC<Props> = ({
     
     setPlayingIndex(index);
     try {
-      await playTTS(text, 'Puck', voiceEngine as VoiceEngine, userApiKey);
+      await playTTS(text, 'Puck', voiceEngine as VoiceEngine);
     } catch (err) {
       console.error("TTS Error", err);
     } finally {

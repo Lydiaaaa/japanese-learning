@@ -3,7 +3,7 @@ import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ScenarioContent, Language, ProgressCallback, VoiceEngine } from "../types";
 
 // Helper to safely get the API Key in both Vite (production) and AI Studio (preview) environments
-const getDefaultApiKey = () => {
+const getApiKey = () => {
   // @ts-ignore - Vite environment
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
     // @ts-ignore
@@ -13,14 +13,13 @@ const getDefaultApiKey = () => {
   return process.env.API_KEY;
 };
 
-// Initialize Gemini Client dynamically
-const getAIClient = (customKey?: string) => {
-  const keyToUse = customKey || getDefaultApiKey();
-  if (!keyToUse) {
-    throw new Error("API Key is missing! Please configure it in settings.");
-  }
-  return new GoogleGenAI({ apiKey: keyToUse });
-};
+const apiKey = getApiKey();
+if (!apiKey) {
+  console.error("API Key is missing! Please check your .env configuration.");
+}
+
+// Initialize Gemini directly
+const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
 // ---------------------------------------------------------------------------
 // AUDIO SYSTEM OPTIMIZATIONS
@@ -63,13 +62,9 @@ function processAudioChunk(base64: string): Float32Array {
   return float32Data;
 }
 
-export const generateScenarioContent = async (
-  scenario: string, 
-  language: Language = 'zh', 
-  customApiKey?: string,
-  onStatusUpdate?: (status: 'init' | 'vocab' | 'expr' | 'dialogue' | 'finalizing') => void
-): Promise<ScenarioContent> => {
-  const ai = getAIClient(customApiKey);
+export const generateScenarioContent = async (scenario: string, language: Language = 'zh'): Promise<ScenarioContent> => {
+  const currentKey = getApiKey();
+  if (!currentKey) throw new Error("API Key missing");
 
   // Updated Prompt to explicitly request full pronunciation data AND bilingual translations
   const prompt = `
@@ -83,8 +78,7 @@ export const generateScenarioContent = async (
     Ensure natural Japanese suitable for daily life.
   `;
 
-  // Use generateContentStream to allow real-time progress updates
-  const responseStream = await ai.models.generateContentStream({
+  const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: prompt,
     config: {
@@ -168,48 +162,8 @@ export const generateScenarioContent = async (
     }
   });
 
-  let fullText = '';
-  // State flags to ensure we only trigger updates once per section
-  let hasNotifiedVocab = false;
-  let hasNotifiedExpr = false;
-  let hasNotifiedDialogue = false;
-
-  for await (const chunk of responseStream) {
-    const text = chunk.text;
-    if (text) {
-      fullText += text;
-      
-      if (onStatusUpdate) {
-        // Detect progress based on JSON keys appearing in the stream
-        if (!hasNotifiedVocab && fullText.includes('"vocabulary"')) {
-          onStatusUpdate('vocab');
-          hasNotifiedVocab = true;
-        }
-        if (!hasNotifiedExpr && fullText.includes('"expressions"')) {
-          onStatusUpdate('expr');
-          hasNotifiedExpr = true;
-        }
-        if (!hasNotifiedDialogue && fullText.includes('"dialogues"')) {
-          onStatusUpdate('dialogue');
-          hasNotifiedDialogue = true;
-        }
-      }
-    }
-  }
-
-  if (onStatusUpdate) {
-    onStatusUpdate('finalizing');
-  }
-
-  if (fullText) {
-    let result: ScenarioContent;
-    try {
-      result = JSON.parse(fullText) as ScenarioContent;
-    } catch (e) {
-      // Fallback: try to clean markdown code blocks if present (though schema usually prevents this)
-      const cleanText = fullText.replace(/```json/g, '').replace(/```/g, '').trim();
-      result = JSON.parse(cleanText) as ScenarioContent;
-    }
+  if (response.text) {
+    const result = JSON.parse(response.text) as ScenarioContent;
     
     // SANITIZATION: Deep clean to prevent UI crashes
     
@@ -253,15 +207,16 @@ export const generateScenarioContent = async (
 };
 
 // Retrieve AudioBuffer for text (from Cache or Network)
-export const getAudioBuffer = async (text: string, voiceName: string, customApiKey?: string): Promise<AudioBuffer> => {
+export const getAudioBuffer = async (text: string, voiceName: string): Promise<AudioBuffer> => {
+  const currentKey = getApiKey();
+  if (!currentKey) throw new Error("API Key missing");
+
   const ctx = getAudioContext();
   const cacheKey = `${voiceName}-${text}`;
 
   if (audioCache.has(cacheKey)) {
     return audioCache.get(cacheKey)!;
   }
-
-  const ai = getAIClient(customApiKey);
 
   // Fetch from API
   const stream = await ai.models.generateContentStream({
@@ -305,8 +260,7 @@ export const getAudioBuffer = async (text: string, voiceName: string, customApiK
 // Generate Dialogue Audio with Concurrency Control and Progress Reporting
 export const generateDialogueAudioWithProgress = async (
     lines: {text: string, speaker: string}[],
-    onProgress?: ProgressCallback,
-    customApiKey?: string
+    onProgress?: ProgressCallback
 ): Promise<Blob> => {
    const ctx = getAudioContext();
    const buffers: AudioBuffer[] = [];
@@ -322,7 +276,7 @@ export const generateDialogueAudioWithProgress = async (
            let attempts = 0;
            while (attempts < 3) {
              try {
-               return await getAudioBuffer(line.text, voice, customApiKey);
+               return await getAudioBuffer(line.text, voice);
              } catch (e) {
                attempts++;
                await new Promise(r => setTimeout(r, 500 * attempts));
@@ -394,18 +348,15 @@ export const playSystemTTS = (text: string): Promise<void> => {
 };
 
 // Unified Play TTS function
-export const playTTS = async (
-  text: string, 
-  voiceName: 'Puck' | 'Kore' = 'Puck', 
-  engine: VoiceEngine = 'system',
-  customApiKey?: string
-): Promise<void> => {
+export const playTTS = async (text: string, voiceName: 'Puck' | 'Kore' = 'Puck', engine: VoiceEngine = 'system'): Promise<void> => {
   // If engine is system, use native browser TTS
   if (engine === 'system') {
     return playSystemTTS(text);
   }
 
-  const ai = getAIClient(customApiKey);
+  // Otherwise, use Gemini AI
+  const currentKey = getApiKey();
+  if (!currentKey) throw new Error("API Key missing");
 
   const ctx = getAudioContext();
   const cacheKey = `${voiceName}-${text}`;

@@ -1,5 +1,4 @@
 
-
 import { Category } from './types';
 
 export const CATEGORIES: Category[] = [
@@ -170,13 +169,6 @@ export const UI_TEXT = {
     currentScenario: '当前场景',
     constructing: '正在构建场景...',
     constructingDesc: '正在为您分析语境、筛选词汇并编写对话：',
-    genStatus: {
-      init: '正在分析场景语境...',
-      vocab: '正在筛选核心词汇...',
-      expr: '正在匹配常用表达...',
-      dialogue: '正在编写情景对话...',
-      finalizing: '正在整理最终内容...'
-    },
     errorTitle: '出错了',
     errorDesc: '生成内容失败，请检查API Key或重试。',
     goHome: '返回首页',
@@ -220,23 +212,7 @@ export const UI_TEXT = {
     loadingShare: '正在加载分享的场景...',
     shareError: '无法加载分享的内容',
     deleteVersion: '删除此版本',
-    confirmDeleteVersion: '确定要删除当前版本的内容吗？无法撤销。',
-    settings: '设置',
-    language: '语言',
-    apiConfig: 'API 配置',
-    apiSetup: {
-      title: 'API 配置',
-      description: '为了生成日语学习内容，我们需要连接到 Gemini AI。',
-      communityOption: '使用社区额度 (免费)',
-      communityDesc: '直接使用，可能受速率限制，生成较慢。',
-      customOption: '使用个人 API Key (推荐)',
-      customDesc: '使用您自己的 Gemini API Key。速度更快，隐私更好。',
-      inputLabel: '请输入您的 Gemini API Key:',
-      getKeyLink: '如何获取 Key?',
-      save: '保存配置',
-      privacyNote: '您的 Key 仅保存在浏览器本地，绝不会上传到服务器。',
-      changeLater: '您随时可以在右上角的“设置”菜单中修改此配置。'
-    }
+    confirmDeleteVersion: '确定要删除当前版本的内容吗？无法撤销。'
   },
   en: {
     title: 'Nihongo Scene Master',
@@ -250,13 +226,6 @@ export const UI_TEXT = {
     currentScenario: 'Current Scenario',
     constructing: 'Constructing Scenario...',
     constructingDesc: 'Analyzing context, selecting vocabulary, and writing dialogues for:',
-    genStatus: {
-      init: 'Analyzing scenario context...',
-      vocab: 'Selecting core vocabulary...',
-      expr: 'Matching useful expressions...',
-      dialogue: 'Writing conversation dialogues...',
-      finalizing: 'Finalizing content...'
-    },
     errorTitle: 'Oops! Something went wrong.',
     errorDesc: 'Failed to generate content. Please check your API key or try again.',
     goHome: 'Go Home',
@@ -274,3 +243,32 @@ export const UI_TEXT = {
     history: 'My Scenarios',
     noHistory: 'No history yet',
     regenerate: 'Regenerate',
+    versions: 'Versions',
+    latest: 'Latest',
+    delete: 'Delete',
+    version: 'Version',
+    login: 'Log In',
+    logout: 'Log Out',
+    syncing: 'Syncing...',
+    guest: 'Guest',
+    download: 'Download PDF',
+    generatingPDF: 'Generating...',
+    shuffle: 'Shuffle',
+    notation: 'Notation',
+    kana: 'Kana',
+    romaji: 'Romaji',
+    downloadAudio: 'Download Audio',
+    generatingAudio: 'Generating Audio...',
+    voiceEngine: 'Voice Engine',
+    engineSystem: 'Fast',
+    engineAi: 'AI High-Q',
+    share: 'Share',
+    copyLink: 'Copy Link',
+    linkCopied: 'Link Copied!',
+    creatingLink: 'Creating...',
+    loadingShare: 'Loading shared scenario...',
+    shareError: 'Failed to load shared content',
+    deleteVersion: 'Delete Version',
+    confirmDeleteVersion: 'Are you sure you want to delete this version? This cannot be undone.'
+  }
+};

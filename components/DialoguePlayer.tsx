@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { DialogueSection, Language, Notation, VoiceEngine } from '../types';
-import { Play, Mic, Volume2, MessageSquare, Download, Loader2, RefreshCw } from 'lucide-react';
+import { Play, Pause, Mic, Volume2, MessageSquare, Download, Loader2, RefreshCw } from 'lucide-react';
 import { playTTS, generateDialogueAudioWithProgress } from '../services/geminiService';
 import { UI_TEXT } from '../constants';
 
@@ -11,7 +11,6 @@ interface Props {
   notation: Notation;
   voiceEngine?: VoiceEngine;
   onRetry?: () => void;
-  userApiKey?: string;
 }
 
 const getTranslation = (trans: string | { en: string; zh: string } | undefined, lang: Language) => {
@@ -20,14 +19,7 @@ const getTranslation = (trans: string | { en: string; zh: string } | undefined, 
   return trans[lang] || trans.en || '';
 };
 
-export const DialoguePlayer: React.FC<Props> = ({ 
-  sections, 
-  language, 
-  notation, 
-  voiceEngine = 'system', 
-  onRetry,
-  userApiKey
-}) => {
+export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, voiceEngine = 'system', onRetry }) => {
   const [activeSectionIdx, setActiveSectionIdx] = useState<number>(0);
   const [playingLine, setPlayingLine] = useState<{sectionIdx: number, lineIdx: number} | null>(null);
   const [recordingLine, setRecordingLine] = useState<{sectionIdx: number, lineIdx: number} | null>(null);
@@ -65,7 +57,7 @@ export const DialoguePlayer: React.FC<Props> = ({
     setPlayingLine({ sectionIdx, lineIdx });
     try {
       const voice = speaker === 'A' ? 'Puck' : 'Kore'; 
-      await playTTS(text, voice, voiceEngine as VoiceEngine, userApiKey);
+      await playTTS(text, voice, voiceEngine as VoiceEngine);
     } catch (error) {
       console.error("Audio Playback Error", error);
     } finally {
@@ -91,8 +83,7 @@ export const DialoguePlayer: React.FC<Props> = ({
           (completed, total) => {
              const pct = Math.round((completed / total) * 100);
              setDownloadProgress(`${pct}%`);
-          },
-          userApiKey
+          }
         );
         
         const url = URL.createObjectURL(wavBlob);
