@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Home } from './components/Home';
 import { StudyView } from './components/StudyView';
@@ -86,23 +85,6 @@ export default function App() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // Update loading status messages
-  useEffect(() => {
-    if (viewState === ViewState.GENERATING) {
-      setLoadingStatus('init');
-      
-      const timers: ReturnType<typeof setTimeout>[] = [];
-      timers.push(setTimeout(() => setLoadingStatus('vocab'), 2500));
-      timers.push(setTimeout(() => setLoadingStatus('expr'), 5500));
-      timers.push(setTimeout(() => setLoadingStatus('dialogue'), 9500));
-      timers.push(setTimeout(() => setLoadingStatus('finalizing'), 14000));
-
-      return () => {
-        timers.forEach(clearTimeout);
-      };
-    }
-  }, [viewState]);
 
   // Check for Share URL on mount
   useEffect(() => {
@@ -281,9 +263,15 @@ export default function App() {
 
   const executeScenarioGeneration = async (scenarioName: string) => {
     setViewState(ViewState.GENERATING);
+    setLoadingStatus('init');
     try {
       const customKey = apiConfig?.mode === 'custom' ? apiConfig.apiKey : undefined;
-      const content = await generateScenarioContent(scenarioName, language, customKey);
+      const content = await generateScenarioContent(
+          scenarioName, 
+          language, 
+          customKey,
+          (status) => setLoadingStatus(status as any) // Type cast for matching status
+      );
       const savedVersion = saveScenarioToHistory(scenarioName, content);
       
       setCurrentVersions([savedVersion]);
@@ -350,10 +338,16 @@ export default function App() {
 
     setViewState(ViewState.GENERATING);
     setLoadingScenarioName(scenarioIdToUse);
+    setLoadingStatus('init');
     
     try {
       const customKey = apiConfig?.mode === 'custom' ? apiConfig.apiKey : undefined;
-      const content = await generateScenarioContent(scenarioIdToUse, language, customKey);
+      const content = await generateScenarioContent(
+          scenarioIdToUse, 
+          language, 
+          customKey,
+          (status) => setLoadingStatus(status as any) // Type cast for matching status
+      );
       const savedVersion = saveScenarioToHistory(scenarioIdToUse, content);
       
       setCurrentVersions(prev => [savedVersion, ...prev]);

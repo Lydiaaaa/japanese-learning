@@ -63,7 +63,12 @@ function processAudioChunk(base64: string): Float32Array {
   return float32Data;
 }
 
-export const generateScenarioContent = async (scenario: string, language: Language = 'zh', customApiKey?: string): Promise<ScenarioContent> => {
+export const generateScenarioContent = async (
+  scenario: string, 
+  language: Language = 'zh', 
+  customApiKey?: string,
+  onStatusUpdate?: (status: 'init' | 'vocab' | 'expr' | 'dialogue' | 'finalizing') => void
+): Promise<ScenarioContent> => {
   const ai = getAIClient(customApiKey);
 
   // Updated Prompt to explicitly request full pronunciation data AND bilingual translations
@@ -78,7 +83,8 @@ export const generateScenarioContent = async (scenario: string, language: Langua
     Ensure natural Japanese suitable for daily life.
   `;
 
-  const response = await ai.models.generateContent({
+  // Use generateContentStream to allow real-time progress updates
+  const responseStream = await ai.models.generateContentStream({
     model: 'gemini-2.5-flash',
     contents: prompt,
     config: {
@@ -162,8 +168,48 @@ export const generateScenarioContent = async (scenario: string, language: Langua
     }
   });
 
-  if (response.text) {
-    const result = JSON.parse(response.text) as ScenarioContent;
+  let fullText = '';
+  // State flags to ensure we only trigger updates once per section
+  let hasNotifiedVocab = false;
+  let hasNotifiedExpr = false;
+  let hasNotifiedDialogue = false;
+
+  for await (const chunk of responseStream) {
+    const text = chunk.text;
+    if (text) {
+      fullText += text;
+      
+      if (onStatusUpdate) {
+        // Detect progress based on JSON keys appearing in the stream
+        if (!hasNotifiedVocab && fullText.includes('"vocabulary"')) {
+          onStatusUpdate('vocab');
+          hasNotifiedVocab = true;
+        }
+        if (!hasNotifiedExpr && fullText.includes('"expressions"')) {
+          onStatusUpdate('expr');
+          hasNotifiedExpr = true;
+        }
+        if (!hasNotifiedDialogue && fullText.includes('"dialogues"')) {
+          onStatusUpdate('dialogue');
+          hasNotifiedDialogue = true;
+        }
+      }
+    }
+  }
+
+  if (onStatusUpdate) {
+    onStatusUpdate('finalizing');
+  }
+
+  if (fullText) {
+    let result: ScenarioContent;
+    try {
+      result = JSON.parse(fullText) as ScenarioContent;
+    } catch (e) {
+      // Fallback: try to clean markdown code blocks if present (though schema usually prevents this)
+      const cleanText = fullText.replace(/```json/g, '').replace(/```/g, '').trim();
+      result = JSON.parse(cleanText) as ScenarioContent;
+    }
     
     // SANITIZATION: Deep clean to prevent UI crashes
     
