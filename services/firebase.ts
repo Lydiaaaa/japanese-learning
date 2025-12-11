@@ -1,6 +1,23 @@
-import firebase from 'firebase/app';
-import 'firebase/auth';
-import 'firebase/firestore';
+
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { 
+  getAuth, 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut, 
+  onAuthStateChanged, 
+  User as FirebaseUser,
+  Auth
+} from 'firebase/auth';
+import { 
+  getFirestore, 
+  doc, 
+  getDoc, 
+  setDoc, 
+  addDoc,
+  collection,
+  Firestore 
+} from 'firebase/firestore';
 import { SavedItem, ScenarioHistoryItem, ScenarioContent } from '../types';
 
 // ---------------------------------------------------------
@@ -18,32 +35,30 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-let app;
-let auth: firebase.auth.Auth;
-let db: firebase.firestore.Firestore;
+let app: FirebaseApp | undefined;
+let auth: Auth | undefined;
+let db: Firestore | undefined;
 let isConfigured = false;
 
 try {
   // Basic check to see if user has replaced the placeholder
   if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY") {
-    if (!firebase.apps.length) {
-      app = firebase.initializeApp(firebaseConfig);
-    } else {
-      app = firebase.app();
-    }
-    auth = firebase.auth();
-    db = firebase.firestore();
+    // Check if app is already initialized to prevent errors in hot-reload environments
+    app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+    auth = getAuth(app);
+    db = getFirestore(app);
     isConfigured = true;
   }
 } catch (e) {
   console.error("Firebase initialization failed:", e);
 }
 
-// Export User type for consumption in components
-export type User = firebase.User;
+// Re-export User type for consumption in components
+export type User = FirebaseUser;
 
 // Guest User Definition
 export const GUEST_ID = 'guest_user';
+// Mock object that satisfies minimal User interface for the app's needs
 export const GUEST_USER = {
   uid: GUEST_ID,
   displayName: '访客 (Guest)',
@@ -62,10 +77,10 @@ export const GUEST_USER = {
   toJSON: () => ({}),
   phoneNumber: null,
   providerId: 'guest'
-} as unknown as firebase.User;
+} as unknown as FirebaseUser;
 
 export const loginWithGoogle = async () => {
-  if (!isConfigured) {
+  if (!isConfigured || !auth) {
     alert("请先在 services/firebase.ts 文件中配置您的 Firebase 密钥。");
     return;
   }
@@ -81,9 +96,9 @@ export const loginWithGoogle = async () => {
     return;
   }
 
-  const provider = new firebase.auth.GoogleAuthProvider();
+  const provider = new GoogleAuthProvider();
   try {
-    const result = await auth.signInWithPopup(provider);
+    const result = await signInWithPopup(auth, provider);
     return result;
   } catch (error: any) {
     console.error("Login failed", error);
@@ -107,16 +122,16 @@ export const loginWithGoogle = async () => {
 };
 
 export const logout = async () => {
-  if (!isConfigured) return;
-  return auth.signOut();
+  if (!isConfigured || !auth) return;
+  return signOut(auth);
 };
 
-export const subscribeToAuth = (callback: (user: firebase.User | null) => void) => {
-  if (!isConfigured) {
+export const subscribeToAuth = (callback: (user: FirebaseUser | null) => void) => {
+  if (!isConfigured || !auth) {
     callback(null);
     return () => {};
   }
-  return auth.onAuthStateChanged(callback);
+  return onAuthStateChanged(auth, callback);
 };
 
 // Merge Strategy
@@ -156,24 +171,24 @@ export const syncUserData = async (uid: string, localData: { favorites: SavedIte
      return localData;
    }
 
-   if (!isConfigured) return null;
+   if (!isConfigured || !db) return null;
    
-   const userRef = db.collection('users').doc(uid);
+   const userRef = doc(db, 'users', uid);
    
    try {
-     const snap = await userRef.get();
+     const snap = await getDoc(userRef);
      
-     if (snap.exists) {
+     if (snap.exists()) {
        const cloudData = snap.data() as { favorites: SavedItem[], history: ScenarioHistoryItem[] };
        const merged = mergeData(
          { favorites: cloudData.favorites || [], history: cloudData.history || [] }, 
          localData
        );
        
-       await userRef.set(merged, { merge: true });
+       await setDoc(userRef, merged, { merge: true });
        return merged;
      } else {
-       await userRef.set(localData);
+       await setDoc(userRef, localData);
        return localData;
      }
    } catch (e) {
@@ -184,9 +199,10 @@ export const syncUserData = async (uid: string, localData: { favorites: SavedIte
 
 export const saveUserData = async (uid: string, data: { favorites: SavedItem[], history: ScenarioHistoryItem[] }) => {
   if (uid === GUEST_ID) return;
-  if (!isConfigured) return;
+  if (!isConfigured || !db) return;
   try {
-    await db.collection('users').doc(uid).set(data, { merge: true });
+    const userRef = doc(db, 'users', uid);
+    await setDoc(userRef, data, { merge: true });
   } catch (e) {
     console.error("Save failed", e);
   }
@@ -195,9 +211,10 @@ export const saveUserData = async (uid: string, data: { favorites: SavedItem[], 
 // --- SHARING FUNCTIONALITY ---
 
 export const shareScenario = async (content: ScenarioContent): Promise<string | null> => {
-  if (!isConfigured) return null;
+  if (!isConfigured || !db) return null;
   try {
-    const docRef = await db.collection('shares').add({
+    const sharesRef = collection(db, 'shares');
+    const docRef = await addDoc(sharesRef, {
       ...content,
       _sharedAt: Date.now()
     });
@@ -209,11 +226,11 @@ export const shareScenario = async (content: ScenarioContent): Promise<string | 
 };
 
 export const getSharedScenario = async (id: string): Promise<ScenarioContent | null> => {
-  if (!isConfigured) return null;
+  if (!isConfigured || !db) return null;
   try {
-    const docRef = db.collection('shares').doc(id);
-    const snap = await docRef.get();
-    if (snap.exists) {
+    const docRef = doc(db, 'shares', id);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
       const data = snap.data();
       const { _sharedAt, ...content } = data as any;
       return content as ScenarioContent;
