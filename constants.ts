@@ -1,4 +1,5 @@
 
+
 import { Category } from './types';
 
 export const CATEGORIES: Category[] = [
@@ -169,6 +170,13 @@ export const UI_TEXT = {
     currentScenario: '当前场景',
     constructing: '正在构建场景...',
     constructingDesc: '正在为您分析语境、筛选词汇并编写对话：',
+    genStatus: {
+      init: '正在分析场景语境...',
+      vocab: '正在筛选核心词汇...',
+      expr: '正在匹配常用表达...',
+      dialogue: '正在编写情景对话...',
+      finalizing: '正在整理最终内容...'
+    },
     errorTitle: '出错了',
     errorDesc: '生成内容失败，请检查API Key或重试。',
     goHome: '返回首页',
@@ -242,6 +250,13 @@ export const UI_TEXT = {
     currentScenario: 'Current Scenario',
     constructing: 'Constructing Scenario...',
     constructingDesc: 'Analyzing context, selecting vocabulary, and writing dialogues for:',
+    genStatus: {
+      init: 'Analyzing scenario context...',
+      vocab: 'Selecting core vocabulary...',
+      expr: 'Matching useful expressions...',
+      dialogue: 'Writing conversation dialogues...',
+      finalizing: 'Finalizing content...'
+    },
     errorTitle: 'Oops! Something went wrong.',
     errorDesc: 'Failed to generate content. Please check your API key or try again.',
     goHome: 'Go Home',
@@ -259,48 +274,3 @@ export const UI_TEXT = {
     history: 'My Scenarios',
     noHistory: 'No history yet',
     regenerate: 'Regenerate',
-    versions: 'Versions',
-    latest: 'Latest',
-    delete: 'Delete',
-    version: 'Version',
-    login: 'Log In',
-    logout: 'Log Out',
-    syncing: 'Syncing...',
-    guest: 'Guest',
-    download: 'Download PDF',
-    generatingPDF: 'Generating...',
-    shuffle: 'Shuffle',
-    notation: 'Notation',
-    kana: 'Kana',
-    romaji: 'Romaji',
-    downloadAudio: 'Download Audio',
-    generatingAudio: 'Generating Audio...',
-    voiceEngine: 'Voice Engine',
-    engineSystem: 'Fast',
-    engineAi: 'AI High-Q',
-    share: 'Share',
-    copyLink: 'Copy Link',
-    linkCopied: 'Link Copied!',
-    creatingLink: 'Creating...',
-    loadingShare: 'Loading shared scenario...',
-    shareError: 'Failed to load shared content',
-    deleteVersion: 'Delete Version',
-    confirmDeleteVersion: 'Are you sure you want to delete this version? This cannot be undone.',
-    settings: 'Settings',
-    language: 'Language',
-    apiConfig: 'API Config',
-    apiSetup: {
-      title: 'API Configuration',
-      description: 'To generate content, we need to connect to Gemini AI.',
-      communityOption: 'Use Community Quota (Free)',
-      communityDesc: 'Ready to use. May be slower due to rate limits.',
-      customOption: 'Use Personal API Key (Recommended)',
-      customDesc: 'Use your own Gemini API Key. Faster and more private.',
-      inputLabel: 'Enter your Gemini API Key:',
-      getKeyLink: 'Get API Key',
-      save: 'Save Configuration',
-      privacyNote: 'Your Key is stored locally in your browser and never sent to our servers.',
-      changeLater: 'You can change this anytime in the "Settings" menu.'
-    }
-  }
-};

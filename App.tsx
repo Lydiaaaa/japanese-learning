@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Home } from './components/Home';
 import { StudyView } from './components/StudyView';
@@ -21,6 +22,7 @@ export default function App() {
   const [currentVersionIndex, setCurrentVersionIndex] = useState<number>(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loadingScenarioName, setLoadingScenarioName] = useState<string>('');
+  const [loadingStatus, setLoadingStatus] = useState<keyof typeof UI_TEXT.zh.genStatus>('init');
   
   // Global State
   const [language, setLanguage] = useState<Language>('zh');
@@ -84,6 +86,23 @@ export default function App() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Update loading status messages
+  useEffect(() => {
+    if (viewState === ViewState.GENERATING) {
+      setLoadingStatus('init');
+      
+      const timers: ReturnType<typeof setTimeout>[] = [];
+      timers.push(setTimeout(() => setLoadingStatus('vocab'), 2500));
+      timers.push(setTimeout(() => setLoadingStatus('expr'), 5500));
+      timers.push(setTimeout(() => setLoadingStatus('dialogue'), 9500));
+      timers.push(setTimeout(() => setLoadingStatus('finalizing'), 14000));
+
+      return () => {
+        timers.forEach(clearTimeout);
+      };
+    }
+  }, [viewState]);
 
   // Check for Share URL on mount
   useEffect(() => {
@@ -567,8 +586,10 @@ export default function App() {
               <div className="absolute inset-0 bg-indigo-200 rounded-full blur-xl opacity-50 animate-pulse"></div>
               <Loader2 className="w-16 h-16 text-indigo-600 animate-spin relative z-10" />
             </div>
-            <h2 className="mt-8 text-2xl font-bold text-slate-800">{t.constructing}</h2>
-            <p className="mt-2 text-slate-500 max-w-md">
+            <h2 className="mt-8 text-2xl font-bold text-slate-800 transition-all duration-300">
+              {t.genStatus[loadingStatus]}
+            </h2>
+            <p className="mt-2 text-slate-500 max-w-md animate-pulse">
               {t.constructingDesc} <br/>
               <span className="font-semibold text-indigo-600">"{loadingScenarioName}"</span>
             </p>
