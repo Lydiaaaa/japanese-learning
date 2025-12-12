@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface LogoProps {
@@ -7,26 +6,35 @@ interface LogoProps {
 }
 
 export const SaynarioLogo: React.FC<LogoProps> = ({ className = "w-8 h-8", variant = 'jp' }) => {
-  // Logic reserved for future multi-language support.
-  // Currently defaulting all variants to the existing logo-jp.png
-  // Future implementation:
-  // const src = variant === 'en' ? '/media/logo-en.png' : '/media/logo-jp.png';
-  
-  const src = '/media/logo-jp.png';
+  // 根据 variant 动态获取 Logo 路径
+  // Determine logo path based on variant
+  const getLogoSrc = () => {
+    switch (variant) {
+      case 'jp':
+        return '/media/logo-jp.png';
+      // 将来扩展其他语言时，只需在这里添加 case，例如：
+      // case 'en': return '/media/logo-en.png';
+      default:
+        // 默认使用日语 Logo
+        return '/media/logo-jp.png';
+    }
+  };
 
   return (
     <img 
-      src={src} 
-      alt="Saynario Logo" 
+      src={getLogoSrc()} 
+      alt={`Saynario Logo (${variant})`} 
       className={`${className} object-contain`}
       onError={(e) => {
-        // Fallback in case image is missing
+        // 如果找不到图片（比如对应的语言 Logo 还没上传），回退显示 emoji
+        // Fallback in case image is missing: render a simple text placeholder
         e.currentTarget.style.display = 'none';
         const parent = e.currentTarget.parentElement;
-        if (parent) {
+        // 避免重复添加 (Avoid duplicate appending)
+        if (parent && !parent.querySelector('.logo-fallback')) {
            const span = document.createElement('span');
            span.innerText = '🌸';
-           span.className = 'text-2xl';
+           span.className = 'text-2xl logo-fallback select-none';
            parent.appendChild(span);
         }
       }}
