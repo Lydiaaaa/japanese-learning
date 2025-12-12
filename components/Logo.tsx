@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface LogoProps {
   className?: string;
@@ -6,38 +6,42 @@ interface LogoProps {
 }
 
 export const SaynarioLogo: React.FC<LogoProps> = ({ className = "w-8 h-8", variant = 'jp' }) => {
-  // 根据 variant 动态获取 Logo 路径
-  // Determine logo path based on variant
-  const getLogoSrc = () => {
-    switch (variant) {
-      case 'jp':
-        return '/media/logo-jp.png';
-      // 将来扩展其他语言时，只需在这里添加 case，例如：
-      // case 'en': return '/media/logo-en.png';
-      default:
-        // 默认使用日语 Logo
-        return '/media/logo-jp.png';
+  // 初始路径使用相对路径 (Relative path is safer for sub-directory deployments)
+  const initialPath = variant === 'jp' ? 'media/logo-jp.png' : 'media/logo-jp.png';
+  
+  const [imgSrc, setImgSrc] = useState(initialPath);
+  const [hasError, setHasError] = useState(false);
+
+  // 当 variant 变化时重置状态
+  useEffect(() => {
+    setImgSrc(variant === 'jp' ? 'media/logo-jp.png' : 'media/logo-jp.png');
+    setHasError(false);
+  }, [variant]);
+
+  const handleError = () => {
+    // 第一次失败：尝试从根目录加载 (First fail: try loading from root)
+    if (imgSrc.startsWith('media/')) {
+      setImgSrc('logo-jp.png');
+    } else {
+      // 第二次失败：显示 Emoji (Second fail: show fallback)
+      setHasError(true);
     }
   };
 
+  if (hasError) {
+    return (
+      <div className={`${className} flex items-center justify-center bg-pink-50 rounded-lg text-xl select-none`} title="Logo missing">
+        🌸
+      </div>
+    );
+  }
+
   return (
     <img 
-      src={getLogoSrc()} 
+      src={imgSrc} 
       alt={`Saynario Logo (${variant})`} 
       className={`${className} object-contain`}
-      onError={(e) => {
-        // 如果找不到图片（比如对应的语言 Logo 还没上传），回退显示 emoji
-        // Fallback in case image is missing: render a simple text placeholder
-        e.currentTarget.style.display = 'none';
-        const parent = e.currentTarget.parentElement;
-        // 避免重复添加 (Avoid duplicate appending)
-        if (parent && !parent.querySelector('.logo-fallback')) {
-           const span = document.createElement('span');
-           span.innerText = '🌸';
-           span.className = 'text-2xl logo-fallback select-none';
-           parent.appendChild(span);
-        }
-      }}
+      onError={handleError}
     />
   );
 };
