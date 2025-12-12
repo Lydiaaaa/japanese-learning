@@ -36,6 +36,15 @@ const firebaseConfig = {
   measurementId: "G-1EKBXY65QS"
 };
 
+// ---------------------------------------------------------
+// ADMIN CONFIGURATION (管理员白名单)
+// Add your Google Account email(s) here to bypass daily limits
+// 请在这里填入您的 Google 邮箱，登录后即可无限使用
+// ---------------------------------------------------------
+const ADMIN_EMAILS = [
+  "lydialmz610@gmail.com" // <--- 请修改这里为您的邮箱
+];
+
 // Initialize Firebase
 let app: FirebaseApp | undefined;
 let auth: Auth | undefined;
@@ -269,6 +278,11 @@ const getTodayDateString = () => {
 };
 
 export const checkDailyQuota = async (user: User | null): Promise<{ allowed: boolean; remaining: number }> => {
+  // 1. ADMIN BYPASS CHECK
+  if (user && user.email && ADMIN_EMAILS.includes(user.email)) {
+    return { allowed: true, remaining: 9999 };
+  }
+
   if (!isConfigured || !db) {
     // If Firebase isn't configured, we default to allowing it (dev mode) or blocking it depending on policy.
     // Here we allow it for safety in dev.
@@ -299,6 +313,11 @@ export const checkDailyQuota = async (user: User | null): Promise<{ allowed: boo
 };
 
 export const incrementDailyQuota = async (user: User | null) => {
+  // 1. ADMIN BYPASS CHECK - Admins don't consume quota
+  if (user && user.email && ADMIN_EMAILS.includes(user.email)) {
+    return;
+  }
+
   if (!isConfigured || !db) return;
 
   const userId = getStableUserId(user);
