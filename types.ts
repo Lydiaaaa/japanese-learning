@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 
 export type Language = 'zh' | 'en';
 export type Notation = 'kana' | 'romaji';
