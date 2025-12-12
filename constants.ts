@@ -158,8 +158,8 @@ export const CATEGORIES: Category[] = [
 
 export const UI_TEXT = {
   zh: {
-    title: '日语场景大师',
-    subtitle: '选择一个具体的生活场景，掌握地道的日语表达。',
+    title: 'Saynario',
+    subtitle: '用生活场景练出口语',
     customLabel: '您想去哪里？',
     customPlaceholder: '例如：在派出所挂失...',
     start: '开始',
@@ -169,6 +169,14 @@ export const UI_TEXT = {
     currentScenario: '当前场景',
     constructing: '正在构建场景...',
     constructingDesc: '正在为您分析语境、筛选词汇并编写对话：',
+    // New loading steps
+    loadingSteps: [
+      '正在分析场景语境...',
+      '正在筛选核心高频词汇...',
+      '正在编写地道的表达方式...',
+      '正在构建双人情景对话...',
+      '正在进行最终校对与翻译...'
+    ],
     errorTitle: '出错了',
     errorDesc: '生成内容失败，请检查API Key或重试。',
     goHome: '返回首页',
@@ -176,7 +184,7 @@ export const UI_TEXT = {
     back: '返回',
     favorites: '我的收藏',
     noFavorites: '暂无收藏内容',
-    navTitle: '日语场景大师',
+    navTitle: 'Saynario',
     listen: '试听',
     record: '跟读',
     stop: '停止',
@@ -215,8 +223,8 @@ export const UI_TEXT = {
     confirmDeleteVersion: '确定要删除当前版本的内容吗？无法撤销。'
   },
   en: {
-    title: 'Nihongo Scene Master',
-    subtitle: 'Select a real-life scenario to master vocabulary and conversation.',
+    title: 'Saynario',
+    subtitle: 'Scene-based speaking for real-life language.',
     customLabel: 'Where do you want to go today?',
     customPlaceholder: 'e.g., Returning a lost item at the police station...',
     start: 'Start',
@@ -226,6 +234,14 @@ export const UI_TEXT = {
     currentScenario: 'Current Scenario',
     constructing: 'Constructing Scenario...',
     constructingDesc: 'Analyzing context, selecting vocabulary, and writing dialogues for:',
+    // New loading steps
+    loadingSteps: [
+      'Analyzing scenario context...',
+      'Selecting essential vocabulary...',
+      'Curating useful expressions...',
+      'Writing realistic dialogues...',
+      'Finalizing translations...'
+    ],
     errorTitle: 'Oops! Something went wrong.',
     errorDesc: 'Failed to generate content. Please check your API key or try again.',
     goHome: 'Go Home',
@@ -233,7 +249,7 @@ export const UI_TEXT = {
     back: 'Back',
     favorites: 'My Favorites',
     noFavorites: 'No favorites yet',
-    navTitle: 'Nihongo Scene Master',
+    navTitle: 'Saynario',
     listen: 'Listen',
     record: 'Shadow',
     stop: 'Stop',

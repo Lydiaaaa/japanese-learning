@@ -1,6 +1,6 @@
 {
-  "name": "Nihongo Scene Master",
-  "description": "A scenario-based Japanese learning application generating vocabulary, expressions, and dialogues for specific real-life situations.",
+  "name": "Saynario",
+  "description": "Scene-based speaking for real-life language.",
   "requestFramePermissions": [
     "microphone"
   ]

@@ -11,6 +11,7 @@ import { generateScenarioContent } from './services/geminiService';
 import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario, User, checkDailyQuota, incrementDailyQuota } from './services/firebase';
 import { Loader2, AlertCircle, RefreshCw, Globe, Star, Settings, Type, Zap, Key } from 'lucide-react';
 import { UI_TEXT } from './constants';
+import { SaynarioLogo } from './components/Logo';
 
 export default function App() {
   const [viewState, setViewState] = useState<ViewState>(ViewState.HOME);
@@ -20,6 +21,7 @@ export default function App() {
   const [currentVersionIndex, setCurrentVersionIndex] = useState<number>(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loadingScenarioName, setLoadingScenarioName] = useState<string>('');
+  const [loadingStep, setLoadingStep] = useState<number>(0);
   
   // Global State
   const [language, setLanguage] = useState<Language>('zh');
@@ -294,9 +296,18 @@ export default function App() {
 
   const executeScenarioGeneration = async (scenarioName: string, overrideKey?: string) => {
     setViewState(ViewState.GENERATING);
+    setLoadingStep(0); // Reset loading step
+    
+    // Simulate progress updates for better UX
+    const progressInterval = setInterval(() => {
+      setLoadingStep(prev => (prev < 4 ? prev + 1 : prev));
+    }, 2800); // Update message every 2.8 seconds
+
     try {
       const content = await generateScenarioContent(scenarioName, language, overrideKey || customApiKey || undefined);
       
+      clearInterval(progressInterval); // Clear timer on success
+
       // If we used the free quota (no custom key), increment usage
       if (!overrideKey && !customApiKey) {
         incrementDailyQuota(user);
@@ -315,6 +326,7 @@ export default function App() {
       setCurrentContent(savedVersion);
       setViewState(ViewState.STUDY);
     } catch (err) {
+      clearInterval(progressInterval); // Clear timer on error
       console.error(err);
       setErrorMsg(t.errorDesc);
       setViewState(ViewState.ERROR);
@@ -420,7 +432,10 @@ export default function App() {
           className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
           onClick={() => setViewState(ViewState.HOME)}
         >
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg flex-shrink-0">日</div>
+          {/* Logo Component with color support */}
+          <div className="text-indigo-600 flex-shrink-0">
+            <SaynarioLogo className="w-9 h-9" variant="jp" />
+          </div>
           <span className="font-bold text-lg text-slate-800 hidden sm:inline">{t.navTitle}</span>
         </div>
         
@@ -564,10 +579,27 @@ export default function App() {
               <div className="absolute inset-0 bg-indigo-200 rounded-full blur-xl opacity-50 animate-pulse"></div>
               <Loader2 className="w-16 h-16 text-indigo-600 animate-spin relative z-10" />
             </div>
-            <h2 className="mt-8 text-2xl font-bold text-slate-800">{t.constructing}</h2>
-            <p className="mt-2 text-slate-500 max-w-md">
-              {t.constructingDesc} <br/>
-              <span className="font-semibold text-indigo-600">"{loadingScenarioName}"</span>
+            
+            {/* Dynamic Loading Text */}
+            <div className="mt-8 h-16 flex flex-col items-center">
+               <h2 className="text-2xl font-bold text-slate-800 animate-in fade-in duration-500 key={loadingStep}">
+                 {t.loadingSteps[Math.min(loadingStep, t.loadingSteps.length - 1)]}
+               </h2>
+               <div className="flex gap-2 mt-4">
+                  {t.loadingSteps.map((_, idx) => (
+                    <div 
+                      key={idx}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                        idx === loadingStep ? 'w-6 bg-indigo-600' : idx < loadingStep ? 'w-2 bg-indigo-200' : 'w-2 bg-slate-200'
+                      }`}
+                    ></div>
+                  ))}
+               </div>
+            </div>
+
+            <p className="mt-6 text-slate-500 max-w-md">
+              <span className="font-semibold text-indigo-600 block mb-1 text-lg">"{loadingScenarioName}"</span>
+              <span className="text-sm opacity-80">{t.constructingDesc}</span>
             </p>
           </div>
         )}
