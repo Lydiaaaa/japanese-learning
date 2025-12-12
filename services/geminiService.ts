@@ -4,13 +4,19 @@ import { ScenarioContent, Language, ProgressCallback, VoiceEngine } from "../typ
 
 // Helper to safely get the API Key in both Vite (production) and AI Studio (preview) environments
 const getSystemApiKey = () => {
-  // @ts-ignore - Vite environment
+  // 1. Check Vite environment variable
+  // @ts-ignore
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
     // @ts-ignore
     return import.meta.env.VITE_API_KEY;
   }
-  // Fallback for AI Studio or Node environment
-  return process.env.API_KEY;
+  
+  // 2. Check process.env safely (Prevents "process is not defined" error in browsers)
+  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+    return process.env.API_KEY;
+  }
+
+  return undefined;
 };
 
 // ---------------------------------------------------------------------------

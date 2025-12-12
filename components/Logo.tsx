@@ -1,56 +1,48 @@
-import React, { useState } from 'react';
-// 显式导入图片，让 Vite 处理路径和打包
-// Explicitly import the image asset so Vite handles bundling and hashing
-import logoJp from '../media/logo-jp.png';
+import React from 'react';
 
 interface LogoProps {
   className?: string;
   variant?: 'jp' | 'en' | 'general';
 }
 
+// Using a pure SVG component instead of an image file to ensure
+// it loads correctly in all environments (Preview, Production, Local)
+// without 404 errors due to path resolution issues.
 export const SaynarioLogo: React.FC<LogoProps> = ({ className = "w-8 h-8", variant = 'jp' }) => {
-  const [error, setError] = useState(false);
-
-  // 如果图片加载失败，显示 SVG 备选方案
-  // If image fails to load, render SVG fallback
-  if (error) {
-    return (
+  return (
+    <div className={`${className} flex-shrink-0 relative`}>
       <svg 
         viewBox="0 0 100 100" 
-        className={`${className} flex-shrink-0`}
+        className="w-full h-full"
         aria-label="Saynario Logo"
       >
-        <circle cx="50" cy="50" r="48" fill="#fff" stroke="#e2e8f0" strokeWidth="2" />
-        <circle cx="50" cy="50" r="20" fill="#fb7185" />
+        {/* Main Background Circle - White */}
+        <circle cx="50" cy="50" r="48" fill="#fff" stroke="#e0f2fe" strokeWidth="2" />
+        
+        {/* Central Element - Cherry Blossom Theme */}
+        <circle cx="50" cy="50" r="22" fill="#fb7185" />
+        
+        {/* Decorative Arcs mimicking the Japanese Flag/Sun motif mixed with bubbles */}
         <path 
-          d="M50 10 A 40 40 0 0 1 90 50" 
+          d="M50 12 A 38 38 0 0 1 88 50" 
           fill="none" 
-          stroke="#fecdd3" 
-          strokeWidth="8" 
+          stroke="#fda4af" 
+          strokeWidth="6" 
           strokeLinecap="round" 
-          className="opacity-50"
+          className="opacity-60"
         />
         <path 
-          d="M50 90 A 40 40 0 0 1 10 50" 
+          d="M50 88 A 38 38 0 0 1 12 50" 
           fill="none" 
           stroke="#1996de" 
-          strokeWidth="8" 
+          strokeWidth="6" 
           strokeLinecap="round" 
-          className="opacity-20"
+          className="opacity-40"
         />
+        
+        {/* Inner detail */}
+        <circle cx="65" cy="35" r="4" fill="#fff" fillOpacity="0.6" />
       </svg>
-    );
-  }
-
-  return (
-    <img 
-      src={logoJp} // 使用导入的变量作为 src (Use the imported variable)
-      alt="Saynario Logo" 
-      className={`${className} object-contain`}
-      onError={() => {
-        console.warn('Logo failed to load via import. Reverting to SVG.');
-        setError(true);
-      }}
-    />
+    </div>
   );
 };
