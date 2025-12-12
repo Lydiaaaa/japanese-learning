@@ -8,23 +8,27 @@ interface LogoProps {
 /**
  * Saynario Brand Logo
  * 
- * 智能 Logo 组件逻辑 (Vite 增强版):
- * 1. 使用 import.meta.env.BASE_URL 动态获取当前部署的基础路径。
- * 2. 结合 'logo-jp.png' 构建绝对正确的引用地址。
+ * Safely resolves image path with fallback to relative path if environment check fails.
  */
 export const SaynarioLogo: React.FC<LogoProps> = ({ className = "w-8 h-8" }) => {
   const [imageError, setImageError] = useState(false);
 
-  // 获取 Vite 配置中的 base 路径 (通常是 "/" 或 "./")
-  // @ts-ignore
-  const baseUrl = import.meta.env.BASE_URL || '/';
-  
-  // 拼接路径：如果 baseUrl 是 "./"，结果就是 "./logo-jp.png"
-  // 如果 baseUrl 是 "/app/", 结果就是 "/app/logo-jp.png"
-  // replace 修正可能出现的双斜杠
-  const imagePath = `${baseUrl}logo-jp.png`.replace('//', '/');
+  // Safe base URL resolution
+  let imagePath = 'logo-jp.png';
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+       // @ts-ignore
+       const baseUrl = import.meta.env.BASE_URL || '/';
+       // Ensure we don't double slash
+       const cleanBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+       imagePath = `${cleanBase}logo-jp.png`;
+    }
+  } catch (e) {
+    console.warn("Error resolving base URL, falling back to relative path", e);
+  }
 
-  // 1. 尝试渲染图片文件
+  // 1. Try to render image
   if (!imageError) {
     return (
       <img 
@@ -32,14 +36,15 @@ export const SaynarioLogo: React.FC<LogoProps> = ({ className = "w-8 h-8" }) => 
         alt="Saynario Logo" 
         className={`${className} object-contain`}
         onError={(e) => {
-          console.error(`Failed to load image from path: [${imagePath}]. Switched to SVG fallback.`);
+          // Only log if it's a real error in development or we want to trace it
+          // console.warn(`Failed to load logo from: ${imagePath}`);
           setImageError(true); 
         }}
       />
     );
   }
 
-  // 2. 如果图片不存在，显示默认的 SVG 品牌标识 (Fallback)
+  // 2. Fallback SVG
   return (
     <div className={className} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <svg 
