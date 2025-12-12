@@ -8,14 +8,10 @@ interface LogoProps {
 /**
  * Saynario Brand Logo
  * 
- * 智能 Logo 组件逻辑：
- * 1. 优先尝试加载 "/logo-jp.png" (需要用户将图片放入 public 文件夹)。
- * 2. 如果加载失败 (文件不存在)，自动降级显示内置的 SVG 矢量 Logo。
- * 
- * !!! 如果图片不显示 !!!
- * 1. 确保项目根目录下有 public 文件夹。
- * 2. 确保文件名为 logo-jp.png。
- * 3. **重启开发服务器** (npm run dev)，因为新建 public 文件夹需要重启才能生效。
+ * 智能 Logo 组件逻辑 (修复版):
+ * 1. 使用相对路径 "logo-jp.png" 而不是 "/logo-jp.png"。
+ *    原因：在某些预览环境或子路径部署中，绝对路径会指向错误的根目录。
+ * 2. 依然保留 SVG 作为兜底显示。
  */
 export const SaynarioLogo: React.FC<LogoProps> = ({ className = "w-8 h-8" }) => {
   // 状态：标记是否应该显示图片文件
@@ -25,13 +21,13 @@ export const SaynarioLogo: React.FC<LogoProps> = ({ className = "w-8 h-8" }) => 
   if (!imageError) {
     return (
       <img 
-        // 添加 ?v=1 强制清除浏览器对之前的 404 缓存
-        src="/logo-jp.png?v=1" 
+        // CHANGE: Removed leading slash. Uses relative path to be safe in sub-folder deployments.
+        // Added timestamp to force refresh cache
+        src={`logo-jp.png?t=${Date.now()}`} 
         alt="Saynario Logo" 
         className={`${className} object-contain`}
         onError={(e) => {
-          console.error("Logo image failed to load from /logo-jp.png. Reverting to SVG fallback.");
-          // 这里可以帮助你调试：如果控制台出现了这条红字，说明浏览器没找到图片
+          console.warn("Failed to load 'logo-jp.png' (Relative path). Reverting to SVG fallback.");
           setImageError(true); 
         }}
       />
