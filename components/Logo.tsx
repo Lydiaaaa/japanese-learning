@@ -9,11 +9,13 @@ interface LogoProps {
  * Saynario Brand Logo
  * 
  * 智能 Logo 组件逻辑：
- * 1. 优先尝试加载 "/logo.png" (需要用户将图片放入 public 文件夹)。
+ * 1. 优先尝试加载 "/logo-jp.png" (需要用户将图片放入 public 文件夹)。
  * 2. 如果加载失败 (文件不存在)，自动降级显示内置的 SVG 矢量 Logo。
  * 
- * Future usage for other images:
- * 同样的方法，将图片放入 public 文件夹，然后直接使用 <img src="/filename.jpg" /> 即可。
+ * !!! 如果图片不显示 !!!
+ * 1. 确保项目根目录下有 public 文件夹。
+ * 2. 确保文件名为 logo-jp.png。
+ * 3. **重启开发服务器** (npm run dev)，因为新建 public 文件夹需要重启才能生效。
  */
 export const SaynarioLogo: React.FC<LogoProps> = ({ className = "w-8 h-8" }) => {
   // 状态：标记是否应该显示图片文件
@@ -23,10 +25,15 @@ export const SaynarioLogo: React.FC<LogoProps> = ({ className = "w-8 h-8" }) => 
   if (!imageError) {
     return (
       <img 
-        src="/logo-jp.png" 
+        // 添加 ?v=1 强制清除浏览器对之前的 404 缓存
+        src="/logo-jp.png?v=1" 
         alt="Saynario Logo" 
         className={`${className} object-contain`}
-        onError={() => setImageError(true)} // 如果加载失败（404），切换到 SVG 模式
+        onError={(e) => {
+          console.error("Logo image failed to load from /logo-jp.png. Reverting to SVG fallback.");
+          // 这里可以帮助你调试：如果控制台出现了这条红字，说明浏览器没找到图片
+          setImageError(true); 
+        }}
       />
     );
   }
