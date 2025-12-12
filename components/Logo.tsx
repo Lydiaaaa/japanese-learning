@@ -8,26 +8,31 @@ interface LogoProps {
 /**
  * Saynario Brand Logo
  * 
- * 智能 Logo 组件逻辑 (修复版):
- * 1. 使用相对路径 "logo-jp.png" 而不是 "/logo-jp.png"。
- *    原因：在某些预览环境或子路径部署中，绝对路径会指向错误的根目录。
- * 2. 依然保留 SVG 作为兜底显示。
+ * 智能 Logo 组件逻辑 (Vite 增强版):
+ * 1. 使用 import.meta.env.BASE_URL 动态获取当前部署的基础路径。
+ * 2. 结合 'logo-jp.png' 构建绝对正确的引用地址。
  */
 export const SaynarioLogo: React.FC<LogoProps> = ({ className = "w-8 h-8" }) => {
-  // 状态：标记是否应该显示图片文件
   const [imageError, setImageError] = useState(false);
+
+  // 获取 Vite 配置中的 base 路径 (通常是 "/" 或 "./")
+  // @ts-ignore
+  const baseUrl = import.meta.env.BASE_URL || '/';
+  
+  // 拼接路径：如果 baseUrl 是 "./"，结果就是 "./logo-jp.png"
+  // 如果 baseUrl 是 "/app/", 结果就是 "/app/logo-jp.png"
+  // replace 修正可能出现的双斜杠
+  const imagePath = `${baseUrl}logo-jp.png`.replace('//', '/');
 
   // 1. 尝试渲染图片文件
   if (!imageError) {
     return (
       <img 
-        // CHANGE: Removed leading slash. Uses relative path to be safe in sub-folder deployments.
-        // Added timestamp to force refresh cache
-        src={`logo-jp.png?t=${Date.now()}`} 
+        src={imagePath}
         alt="Saynario Logo" 
         className={`${className} object-contain`}
         onError={(e) => {
-          console.warn("Failed to load 'logo-jp.png' (Relative path). Reverting to SVG fallback.");
+          console.error(`Failed to load image from path: [${imagePath}]. Switched to SVG fallback.`);
           setImageError(true); 
         }}
       />
