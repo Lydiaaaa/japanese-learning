@@ -1,8 +1,6 @@
-/// <reference types="vite/client" />
-
 export type Language = 'zh' | 'en';
 export type Notation = 'kana' | 'romaji';
-export type VoiceEngine = 'system' | 'ai'; // New type
+export type VoiceEngine = 'system' | 'ai';
 
 export type ProgressCallback = (completed: number, total: number) => void;
 
