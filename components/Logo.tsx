@@ -23,7 +23,7 @@ export const SaynarioLogo: React.FC<LogoProps> = ({ className = "w-8 h-8" }) => 
   if (!imageError) {
     return (
       <img 
-        src="/logo.png" 
+        src="/logo-jp.png" 
         alt="Saynario Logo" 
         className={`${className} object-contain`}
         onError={() => setImageError(true)} // 如果加载失败（404），切换到 SVG 模式
