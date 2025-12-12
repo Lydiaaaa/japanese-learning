@@ -158,8 +158,13 @@ export const CATEGORIES: Category[] = [
 
 export const UI_TEXT = {
   zh: {
-    title: 'Saynario',
-    subtitle: '用生活场景练出口语',
+    // 首页中间的大标题 (Position 1)
+    title: '用生活场景练出口语',
+    // 首页中间的副标题 (Position 2)
+    subtitle: '选择一个具体的生活场景，掌握地道的日语表达。',
+    // 顶部导航栏的 APP 名称
+    navTitle: 'Saynario',
+    
     customLabel: '您想去哪里？',
     customPlaceholder: '例如：在派出所挂失...',
     start: '开始',
@@ -169,7 +174,6 @@ export const UI_TEXT = {
     currentScenario: '当前场景',
     constructing: '正在构建场景...',
     constructingDesc: '正在为您分析语境、筛选词汇并编写对话：',
-    // New loading steps
     loadingSteps: [
       '正在分析场景语境...',
       '正在筛选核心高频词汇...',
@@ -184,7 +188,6 @@ export const UI_TEXT = {
     back: '返回',
     favorites: '我的收藏',
     noFavorites: '暂无收藏内容',
-    navTitle: 'Saynario',
     listen: '试听',
     record: '跟读',
     stop: '停止',
@@ -223,8 +226,13 @@ export const UI_TEXT = {
     confirmDeleteVersion: '确定要删除当前版本的内容吗？无法撤销。'
   },
   en: {
-    title: 'Saynario',
-    subtitle: 'Scene-based speaking for real-life language.',
+    // Home Page Main Title (Position 1)
+    title: 'Scene-based speaking for real-life language',
+    // Home Page Subtitle (Position 2)
+    subtitle: 'Select a real-life scenario to master vocabulary and conversation.',
+    // Navbar App Name
+    navTitle: 'Saynario',
+
     customLabel: 'Where do you want to go today?',
     customPlaceholder: 'e.g., Returning a lost item at the police station...',
     start: 'Start',
@@ -234,7 +242,6 @@ export const UI_TEXT = {
     currentScenario: 'Current Scenario',
     constructing: 'Constructing Scenario...',
     constructingDesc: 'Analyzing context, selecting vocabulary, and writing dialogues for:',
-    // New loading steps
     loadingSteps: [
       'Analyzing scenario context...',
       'Selecting essential vocabulary...',
@@ -249,7 +256,6 @@ export const UI_TEXT = {
     back: 'Back',
     favorites: 'My Favorites',
     noFavorites: 'No favorites yet',
-    navTitle: 'Saynario',
     listen: 'Listen',
     record: 'Shadow',
     stop: 'Stop',

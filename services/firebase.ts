@@ -1,14 +1,12 @@
-
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import * as firebaseAppModule from 'firebase/app';
 import { 
   getAuth, 
   signInWithPopup, 
   GoogleAuthProvider, 
   signOut, 
   onAuthStateChanged, 
-  User as FirebaseUser,
-  Auth
 } from 'firebase/auth';
+import type { Auth, User as FirebaseUser } from 'firebase/auth';
 import { 
   getFirestore, 
   doc, 
@@ -16,11 +14,14 @@ import {
   setDoc, 
   addDoc,
   collection,
-  Firestore,
   updateDoc,
   increment
 } from 'firebase/firestore';
+import type { Firestore } from 'firebase/firestore';
 import { SavedItem, ScenarioHistoryItem, ScenarioContent } from '../types';
+
+// Bypass TypeScript errors for missing exports in firebase/app by casting to any
+const firebaseApp = firebaseAppModule as any;
 
 // ---------------------------------------------------------
 // IMPORTANT: REPLACE THIS WITH YOUR OWN FIREBASE CONFIG
@@ -46,7 +47,7 @@ const ADMIN_EMAILS = [
 ];
 
 // Initialize Firebase
-let app: FirebaseApp | undefined;
+let app: any | undefined;
 let auth: Auth | undefined;
 let db: Firestore | undefined;
 let isConfigured = false;
@@ -55,7 +56,12 @@ try {
   // Basic check to see if user has replaced the placeholder
   if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY") {
     // Check if app is already initialized to prevent errors in hot-reload environments
-    app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+    if (!firebaseApp.getApps().length) {
+      app = firebaseApp.initializeApp(firebaseConfig);
+    } else {
+      app = firebaseApp.getApp();
+    }
+    
     auth = getAuth(app);
     db = getFirestore(app);
     isConfigured = true;
