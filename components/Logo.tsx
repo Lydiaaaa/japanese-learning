@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 interface LogoProps {
   className?: string;
@@ -6,42 +6,52 @@ interface LogoProps {
 }
 
 export const SaynarioLogo: React.FC<LogoProps> = ({ className = "w-8 h-8", variant = 'jp' }) => {
-  // 初始路径使用相对路径 (Relative path is safer for sub-directory deployments)
-  const initialPath = variant === 'jp' ? 'media/logo-jp.png' : 'media/logo-jp.png';
-  
-  const [imgSrc, setImgSrc] = useState(initialPath);
-  const [hasError, setHasError] = useState(false);
+  const [error, setError] = useState(false);
 
-  // 当 variant 变化时重置状态
-  useEffect(() => {
-    setImgSrc(variant === 'jp' ? 'media/logo-jp.png' : 'media/logo-jp.png');
-    setHasError(false);
-  }, [variant]);
+  // 尝试使用相对路径，这在大多数环境中更稳健
+  // Try relative path which is usually more robust
+  const imgSrc = './media/logo-jp.png';
 
-  const handleError = () => {
-    // 第一次失败：尝试从根目录加载 (First fail: try loading from root)
-    if (imgSrc.startsWith('media/')) {
-      setImgSrc('logo-jp.png');
-    } else {
-      // 第二次失败：显示 Emoji (Second fail: show fallback)
-      setHasError(true);
-    }
-  };
-
-  if (hasError) {
+  if (error) {
+    // 如果图片加载失败，渲染一个精美的 SVG 图标作为 Logo
+    // Professional SVG fallback if image fails
     return (
-      <div className={`${className} flex items-center justify-center bg-pink-50 rounded-lg text-xl select-none`} title="Logo missing">
-        🌸
-      </div>
+      <svg 
+        viewBox="0 0 100 100" 
+        className={`${className} flex-shrink-0`}
+        aria-label="Saynario Logo"
+      >
+        <circle cx="50" cy="50" r="48" fill="#fff" stroke="#e2e8f0" strokeWidth="2" />
+        <circle cx="50" cy="50" r="20" fill="#fb7185" /> {/* 日系粉色圆点 (Soft Red/Pink Center) */}
+        <path 
+          d="M50 10 A 40 40 0 0 1 90 50" 
+          fill="none" 
+          stroke="#fecdd3" 
+          strokeWidth="8" 
+          strokeLinecap="round" 
+          className="opacity-50"
+        />
+        <path 
+          d="M50 90 A 40 40 0 0 1 10 50" 
+          fill="none" 
+          stroke="#1996de" 
+          strokeWidth="8" 
+          strokeLinecap="round" 
+          className="opacity-20"
+        />
+      </svg>
     );
   }
 
   return (
     <img 
       src={imgSrc} 
-      alt={`Saynario Logo (${variant})`} 
+      alt="Saynario Logo" 
       className={`${className} object-contain`}
-      onError={handleError}
+      onError={(e) => {
+        console.warn(`Logo image failed to load at ${imgSrc}. Reverting to SVG fallback.`);
+        setError(true);
+      }}
     />
   );
 };
