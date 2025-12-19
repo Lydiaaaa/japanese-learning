@@ -323,8 +323,8 @@ export default function App() {
     setLoadingStep(0); 
     setIsGeneratingDialogues(false);
     
-    // Faster timeline for Step 1
-    const timeline = [1500, 3000];
+    // Adjusted timeline to match reality better (2s, 4.5s)
+    const timeline = [2000, 4500];
     const timers: ReturnType<typeof setTimeout>[] = [];
 
     timeline.forEach((time, index) => {

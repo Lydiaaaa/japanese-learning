@@ -139,6 +139,7 @@ export const generateVocabularyAndExpressions = async (
 
   const langName = language === 'zh' ? 'Simplified Chinese' : 'English';
 
+  // OPTIMIZED PROMPT: Reduced item counts to prevent timeouts and JSON errors
   const prompt = `
     Analyze the scenario: "${scenario}".
     
@@ -148,8 +149,8 @@ export const generateVocabularyAndExpressions = async (
     - Ensure these roles make sense together for the context "${scenario}".
     
     Task 2: Create a Japanese language study list.
-    - Vocabulary: 25-30 essential words.
-    - Expressions: 10-15 common useful phrases.
+    - Vocabulary: 12-15 essential words. (Keep definitions concise).
+    - Expressions: 6-8 common useful phrases. (Keep definitions concise).
     
     Output strictly in JSON.
   `;
