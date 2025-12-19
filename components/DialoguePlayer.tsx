@@ -77,7 +77,8 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, 
 
   const handleDownloadAudio = async () => {
     const section = sections[activeSectionIdx];
-    if (!section || isDownloadingAudio) return;
+    // Safeguard against missing lines
+    if (!section || !section.lines || !Array.isArray(section.lines) || isDownloadingAudio) return;
 
     setIsDownloadingAudio(true);
     setDownloadProgress('0%');
@@ -103,7 +104,7 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, 
         const url = URL.createObjectURL(wavBlob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${section.title.replace(/\s+/g, '_')}_audio.wav`;
+        a.download = `${(section.title || "Scene").replace(/\s+/g, '_')}_audio.wav`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -223,7 +224,8 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, 
               </h3>
               <button 
                  onClick={handleDownloadAudio}
-                 disabled={isDownloadingAudio}
+                 // Disable if downloading OR lines are missing/empty
+                 disabled={isDownloadingAudio || !activeSection.lines || activeSection.lines.length === 0}
                  className="flex items-center gap-2 text-xs font-medium bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px] justify-center"
               >
                  {isDownloadingAudio ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Download className="w-3.5 h-3.5" />}
@@ -232,87 +234,103 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, 
             </div>
 
             <div className="p-4 md:p-6 space-y-6">
-              {activeSection.lines.map((line, lIdx) => {
-                const isPlaying = playingLine?.sectionIdx === activeSectionIdx && playingLine?.lineIdx === lIdx;
-                const isRecording = recordingLine?.sectionIdx === activeSectionIdx && recordingLine?.lineIdx === lIdx;
-                const hasRecording = !!recordedAudio[`${activeSectionIdx}-${lIdx}`];
-                const isUser = line.speaker === 'A'; 
-                const translation = getTranslation(line.translation, language);
+              {/* Defensive Check: Ensure lines exist and are an array */}
+              {activeSection.lines && Array.isArray(activeSection.lines) && activeSection.lines.length > 0 ? (
+                  activeSection.lines.map((line, lIdx) => {
+                    const isPlaying = playingLine?.sectionIdx === activeSectionIdx && playingLine?.lineIdx === lIdx;
+                    const isRecording = recordingLine?.sectionIdx === activeSectionIdx && recordingLine?.lineIdx === lIdx;
+                    const hasRecording = !!recordedAudio[`${activeSectionIdx}-${lIdx}`];
+                    const isUser = line.speaker === 'A'; 
+                    const translation = getTranslation(line.translation, language);
 
-                return (
-                  <div key={lIdx} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[90%] md:max-w-[80%] flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
-                      
-                      <div className="flex items-center gap-2 px-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                          {line.roleName || `${t.speaker} ${line.speaker}`}
-                        </span>
-                      </div>
+                    return (
+                      <div key={lIdx} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[90%] md:max-w-[80%] flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
+                          
+                          <div className="flex items-center gap-2 px-1">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                              {line.roleName || `${t.speaker} ${line.speaker}`}
+                            </span>
+                          </div>
 
-                      <div className={`p-4 md:p-5 rounded-2xl text-lg font-medium relative group transition-all duration-300 ${
-                          isUser 
-                            ? 'bg-indigo-50 border border-indigo-100 text-slate-800 rounded-tr-sm' 
-                            : 'bg-white border border-slate-100 text-slate-800 rounded-tl-sm shadow-sm' 
-                        } ${isPlaying ? 'ring-4 ring-indigo-100' : ''}`}>
-                        
-                        <div className="mb-1 leading-relaxed">{line.japanese}</div>
-                        
-                        <div className={`text-sm font-normal mb-3 pb-2 border-b border-dashed ${
-                          isUser ? 'text-indigo-600 border-indigo-200' : 'text-indigo-600 border-slate-100'
-                        }`}>
-                            {notation === 'kana' ? line.kana : line.romaji}
+                          <div className={`p-4 md:p-5 rounded-2xl text-lg font-medium relative group transition-all duration-300 ${
+                              isUser 
+                                ? 'bg-indigo-50 border border-indigo-100 text-slate-800 rounded-tr-sm' 
+                                : 'bg-white border border-slate-100 text-slate-800 rounded-tl-sm shadow-sm' 
+                            } ${isPlaying ? 'ring-4 ring-indigo-100' : ''}`}>
+                            
+                            <div className="mb-1 leading-relaxed">{line.japanese}</div>
+                            
+                            <div className={`text-sm font-normal mb-3 pb-2 border-b border-dashed ${
+                              isUser ? 'text-indigo-600 border-indigo-200' : 'text-indigo-600 border-slate-100'
+                            }`}>
+                                {notation === 'kana' ? line.kana : line.romaji}
+                            </div>
+
+                            <p className={`text-sm font-normal text-slate-500`}>
+                              {translation}
+                            </p>
+                            
+                            <div className={`flex gap-2 mt-3 pt-1 justify-end opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity`}>
+                                <button 
+                                  onClick={() => handlePlayLine(activeSectionIdx, lIdx, line.japanese, line.speaker)}
+                                  className={`p-1.5 rounded-full transition-all bg-white border border-slate-100 shadow-sm ${
+                                    isPlaying ? 'text-indigo-600 ring-2 ring-indigo-100' : 'text-slate-500 hover:text-indigo-600 hover:border-indigo-200'
+                                  }`}
+                                  title={t.listen}
+                                >
+                                  {isPlaying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5" />}
+                                </button>
+
+                                {!isRecording ? (
+                                  <button 
+                                    onClick={() => startRecording(activeSectionIdx, lIdx)}
+                                    className={`p-1.5 rounded-full transition-all bg-white border border-slate-100 shadow-sm ${
+                                      hasRecording ? 'text-emerald-500 border-emerald-200' : 'text-slate-500 hover:text-indigo-600 hover:border-indigo-200'
+                                    }`}
+                                    title={t.record}
+                                  >
+                                    <Mic className="w-3.5 h-3.5" />
+                                  </button>
+                                ) : (
+                                  <button 
+                                    onClick={stopRecording}
+                                    className="p-1.5 rounded-full bg-red-500 text-white animate-pulse shadow-sm"
+                                    title={t.stop}
+                                  >
+                                    <div className="w-3.5 h-3.5 bg-white rounded-sm" />
+                                  </button>
+                                )}
+
+                                {hasRecording && !isRecording && (
+                                  <button
+                                    onClick={() => playRecording(activeSectionIdx, lIdx)}
+                                    className="p-1.5 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100 shadow-sm"
+                                    title={t.playMy}
+                                  >
+                                    <Play className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                            </div>
+                          </div>
                         </div>
-
-                        <p className={`text-sm font-normal text-slate-500`}>
-                          {translation}
-                        </p>
-                        
-                        <div className={`flex gap-2 mt-3 pt-1 justify-end opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity`}>
-                            <button 
-                              onClick={() => handlePlayLine(activeSectionIdx, lIdx, line.japanese, line.speaker)}
-                              className={`p-1.5 rounded-full transition-all bg-white border border-slate-100 shadow-sm ${
-                                 isPlaying ? 'text-indigo-600 ring-2 ring-indigo-100' : 'text-slate-500 hover:text-indigo-600 hover:border-indigo-200'
-                              }`}
-                              title={t.listen}
-                            >
-                              {isPlaying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5" />}
-                            </button>
-
-                            {!isRecording ? (
-                              <button 
-                                onClick={() => startRecording(activeSectionIdx, lIdx)}
-                                className={`p-1.5 rounded-full transition-all bg-white border border-slate-100 shadow-sm ${
-                                   hasRecording ? 'text-emerald-500 border-emerald-200' : 'text-slate-500 hover:text-indigo-600 hover:border-indigo-200'
-                                }`}
-                                title={t.record}
-                              >
-                                <Mic className="w-3.5 h-3.5" />
-                              </button>
-                            ) : (
-                              <button 
-                                onClick={stopRecording}
-                                className="p-1.5 rounded-full bg-red-500 text-white animate-pulse shadow-sm"
-                                title={t.stop}
-                              >
-                                <div className="w-3.5 h-3.5 bg-white rounded-sm" />
-                              </button>
-                            )}
-
-                            {hasRecording && !isRecording && (
-                              <button
-                                onClick={() => playRecording(activeSectionIdx, lIdx)}
-                                className="p-1.5 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100 shadow-sm"
-                                title={t.playMy}
-                              >
-                                <Play className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
+                    );
+                  })
+              ) : (
+                <div className="text-center py-12 text-slate-400">
+                    <p className="mb-2 font-medium">Content temporarily unavailable</p>
+                    <p className="text-xs max-w-xs mx-auto opacity-70 mb-4">The AI response for this section was incomplete.</p>
+                    {onRetry && (
+                        <button 
+                          onClick={onRetry} 
+                          className="px-4 py-2 bg-slate-100 hover:bg-indigo-50 text-indigo-600 rounded-lg text-sm font-medium transition-colors"
+                        >
+                            Retry Generation
+                        </button>
+                    )}
+                </div>
+              )}
             </div>
            </>
         )}

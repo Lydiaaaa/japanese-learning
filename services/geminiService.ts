@@ -219,7 +219,14 @@ const generateSingleScene = async (
     const response = await Promise.race([fetchPromise, timeoutPromise]);
 
     if (response.text) {
-      return JSON.parse(response.text) as DialogueSection;
+      const parsed = JSON.parse(response.text) as any;
+      
+      // Strict validation to prevent frontend crashes
+      if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.lines)) {
+         throw new Error("Invalid response format: 'lines' array is missing");
+      }
+      
+      return parsed as DialogueSection;
     }
     throw new Error("Empty response");
 
