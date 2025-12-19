@@ -144,104 +144,149 @@ export const generateVocabularyAndExpressions = async (scenario: string, languag
   throw new Error("Failed to generate vocabulary");
 };
 
-// INTERNAL HELPER: Generate a SINGLE scene
-// This reduces the complexity for the model and allows parallel execution.
+// INTERNAL HELPER: Generate a SINGLE scene with Retry & Timeout logic
 const generateSingleScene = async (
   scenario: string,
   sceneIndex: number, // 1, 2, or 3
   sceneType: string, // "Intro", "Process", "Conclusion"
   contextVocab: string,
-  customApiKey?: string
+  customApiKey?: string,
+  attempt: number = 1
 ): Promise<DialogueSection> => {
   const ai = getAiInstance(customApiKey);
 
   const specificInstructions = {
-    1: "Scene 1: Opening/Request. Speaker A arrives or calls. Establish the goal.",
-    2: "Scene 2: Interaction/Details. Verifying information, asking checking questions, handling a small complication or detail.",
-    3: "Scene 3: Closing/Farewell. Confirming completion, thanking, and saying goodbye. MUST NOT end with a question."
+    1: "Scene 1: Opening. Establish the goal.",
+    2: "Scene 2: Interaction. Details/complication.",
+    3: "Scene 3: Closing. Completion/Farewell. NO trailing questions."
   }[sceneIndex] || "";
 
+  // Simplified prompt to reduce model "overthinking"
   const prompt = `
-    Write ONE specific dialogue scene (Part ${sceneIndex} of 3) for the scenario: "${scenario}".
+    Write Scene ${sceneIndex}/3 for: "${scenario}".
+    Type: ${sceneType}.
+    Goal: ${specificInstructions}.
+    Context: ${contextVocab}.
     
-    Context Words to use if natural: ${contextVocab}
-    
-    Focus: ${specificInstructions}
-    
-    Requirements:
-    - 6-8 lines of dialogue between Speaker A and Speaker B.
-    - Natural Japanese suitable for daily life (use Keigo if 'Staff' involved).
-    - Provide full Kana, Romaji, and Translations.
+    Output JSON:
+    - title: Brief title.
+    - lines: 6-8 lines, Speaker A/B.
+    - Fields: speaker, roleName, japanese, kana, romaji, translation (en, zh).
   `;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING, description: `Title for Scene ${sceneIndex}` },
-          lines: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                speaker: { type: Type.STRING, enum: ["A", "B"] },
-                roleName: { type: Type.STRING },
-                japanese: { type: Type.STRING },
-                kana: { type: Type.STRING },
-                romaji: { type: Type.STRING },
-                translation: { 
-                  type: Type.OBJECT, 
-                  properties: {
-                    en: { type: Type.STRING },
-                    zh: { type: Type.STRING }
-                  },
-                  required: ["en", "zh"]
+  try {
+    // Timeout wrapper: 25 seconds limit per scene
+    const fetchPromise = ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            lines: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  speaker: { type: Type.STRING, enum: ["A", "B"] },
+                  roleName: { type: Type.STRING },
+                  japanese: { type: Type.STRING },
+                  kana: { type: Type.STRING },
+                  romaji: { type: Type.STRING },
+                  translation: { 
+                    type: Type.OBJECT, 
+                    properties: {
+                      en: { type: Type.STRING },
+                      zh: { type: Type.STRING }
+                    },
+                    required: ["en", "zh"]
+                  }
                 }
               }
             }
           }
         }
       }
-    }
-  });
+    });
 
-  if (response.text) {
-    return JSON.parse(response.text) as DialogueSection;
+    const TIMEOUT_MS = 25000; // 25s timeout
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error("Timeout")), TIMEOUT_MS)
+    );
+
+    const response = await Promise.race([fetchPromise, timeoutPromise]);
+
+    if (response.text) {
+      return JSON.parse(response.text) as DialogueSection;
+    }
+    throw new Error("Empty response");
+
+  } catch (error) {
+    console.warn(`Scene ${sceneIndex} attempt ${attempt} failed:`, error);
+    if (attempt < 2) {
+      // Retry once
+      return generateSingleScene(scenario, sceneIndex, sceneType, contextVocab, customApiKey, attempt + 1);
+    }
+    // Fallback if failed twice
+    return {
+      title: `Scene ${sceneIndex} (Generation Failed)`,
+      lines: [{
+        speaker: "A",
+        japanese: "エラーが発生しました。",
+        kana: "えらーがはっせいしました。",
+        romaji: "Eraa ga hassei shimashita.",
+        translation: { en: "An error occurred.", zh: "生成失败。" }
+      }]
+    };
   }
-  throw new Error(`Failed to generate scene ${sceneIndex}`);
 };
 
-// STEP 2: Generate Dialogues (OPTIMIZED: PARALLEL)
+// STEP 2: Generate Dialogues (OPTIMIZED: INCREMENTAL STREAMING)
+export const generateDialoguesWithCallback = async (
+  scenario: string, 
+  contextVocabulary: VocabularyItem[], 
+  onSceneComplete: (index: number, scene: DialogueSection) => void,
+  language: Language = 'zh', 
+  customApiKey?: string
+): Promise<void> => {
+  
+  const vocabList = contextVocabulary.slice(0, 8).map(v => v.term).join(", ");
+
+  // Fire requests. We do NOT await Promise.all here because we want to trigger callbacks individually.
+  // However, we track them to ensure the function keeps running.
+  
+  const p1 = generateSingleScene(scenario, 1, "Intro", vocabList, customApiKey)
+    .then(scene => onSceneComplete(0, scene));
+    
+  const p2 = generateSingleScene(scenario, 2, "Process", vocabList, customApiKey)
+    .then(scene => onSceneComplete(1, scene));
+    
+  const p3 = generateSingleScene(scenario, 3, "Conclusion", vocabList, customApiKey)
+    .then(scene => onSceneComplete(2, scene));
+
+  await Promise.all([p1, p2, p3]);
+};
+
+// Kept for backward compatibility if needed, but App.tsx should use the callback version now
 export const generateDialoguesOnly = async (
   scenario: string, 
   contextVocabulary: VocabularyItem[], 
   language: Language = 'zh', 
   customApiKey?: string
 ): Promise<DialogueSection[]> => {
-  
-  // Prepare context (lighter payload)
-  const vocabList = contextVocabulary.slice(0, 8).map(v => v.term).join(", ");
-
-  // Fire 3 requests in PARALLEL
-  // This reduces wait time to the slowest single request (~5-8s) instead of sum (~20s+)
-  try {
-    const [scene1, scene2, scene3] = await Promise.all([
-      generateSingleScene(scenario, 1, "Intro", vocabList, customApiKey),
-      generateSingleScene(scenario, 2, "Process", vocabList, customApiKey),
-      generateSingleScene(scenario, 3, "Conclusion", vocabList, customApiKey)
-    ]);
-
-    return [scene1, scene2, scene3];
-  } catch (error) {
-    console.error("Parallel generation failed, falling back to sequential or error", error);
-    // If parallel fails (rare), we could try sequential, but for now just throw
-    throw error;
-  }
+    const results: DialogueSection[] = [];
+    await generateDialoguesWithCallback(
+        scenario, 
+        contextVocabulary, 
+        (idx, scene) => { results[idx] = scene; },
+        language, 
+        customApiKey
+    );
+    return results;
 };
+
 
 // Keep the old full generation function for fallback/regenerate all if needed
 export const generateScenarioContent = async (scenario: string, language: Language = 'zh', customApiKey?: string): Promise<ScenarioContent> => {

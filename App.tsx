@@ -6,8 +6,8 @@ import { FavoritesView } from './components/FavoritesView';
 import { ScenariosListView } from './components/ScenariosListView';
 import { UserMenu } from './components/UserMenu';
 import { ApiKeyModal } from './components/ApiKeyModal';
-import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine } from './types';
-import { generateVocabularyAndExpressions, generateDialoguesOnly, generateScenarioContent } from './services/geminiService';
+import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine, DialogueSection } from './types';
+import { generateVocabularyAndExpressions, generateDialoguesWithCallback } from './services/geminiService';
 import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario, User, checkDailyQuota, incrementDailyQuota, checkIsAdmin } from './services/firebase';
 import { Loader2, AlertCircle, RefreshCw, Globe, Star, Settings, Type, Zap, Key } from 'lucide-react';
 import { UI_TEXT } from './constants';
@@ -311,9 +311,7 @@ export default function App() {
     }
   };
 
-  // STRATEGY: SPLIT GENERATION
-  // 1. Generate Metadata (Vocab/Expressions) -> Fast -> Show UI
-  // 2. Generate Dialogues -> Slow -> Background Process -> Update UI
+  // STRATEGY: SPLIT GENERATION & INCREMENTAL RENDERING
   const executeScenarioGeneration = async (scenarioName: string, overrideKey?: string) => {
     setViewState(ViewState.GENERATING);
     setLoadingStep(0); 
@@ -339,12 +337,13 @@ export default function App() {
         incrementDailyQuota(user);
       }
 
-      // Construct a valid ScenarioContent object with empty dialogues
+      // Construct a valid ScenarioContent object with empty dialogue placeholders (to be filled later)
+      // This allows the UI to render the structure while data flows in.
       const initialContent: ScenarioContent = {
          scenarioName: scenarioName,
          vocabulary: partialContent.vocabulary || [],
          expressions: partialContent.expressions || [],
-         dialogues: [],
+         dialogues: [], // Empty initially
          timestamp: Date.now()
       };
 
@@ -363,32 +362,58 @@ export default function App() {
       // ENTER STUDY VIEW IMMEDIATELY
       setViewState(ViewState.STUDY);
       
-      // Step 2: Generate Dialogues (Background)
+      // Step 2: Generate Dialogues with Incremental Callbacks
       setIsGeneratingDialogues(true);
+      
+      // Create a mutable copy of dialogues array to update gradually
+      const incomingDialogues: DialogueSection[] = []; 
+      
       try {
-         const dialogues = await generateDialoguesOnly(
+         await generateDialoguesWithCallback(
             scenarioName, 
-            initialContent.vocabulary, // Context Injection
+            initialContent.vocabulary, 
+            (index, sceneData) => {
+                // INCREMENTAL UPDATE:
+                // When a scene arrives, update state immediately.
+                incomingDialogues[index] = sceneData;
+                
+                // We create a new object to trigger React re-render
+                const updatedContent = { 
+                    ...initialContent, 
+                    // Filter out undefined/holes if array is sparse during generation, 
+                    // though usually we want to keep order. 
+                    // Let's rely on the DialoguePlayer to handle missing indices nicely.
+                    dialogues: [...incomingDialogues] 
+                };
+
+                // Update current view
+                setCurrentContent(updatedContent);
+                
+                // Update history silently
+                setScenarioHistory(prev => {
+                    return prev.map(item => {
+                        if (item.id === scenarioName) {
+                            const newVersions = [...item.versions];
+                            newVersions[0] = updatedContent;
+                            return { ...item, versions: newVersions };
+                        }
+                        return item;
+                    });
+                });
+                
+                // Update versions list state
+                setCurrentVersions(prev => {
+                    const updated = [...prev];
+                    updated[0] = updatedContent;
+                    return updated;
+                });
+            },
             language, 
             overrideKey || customApiKey || undefined
          );
 
-         // Update the content in memory and history
-         const fullContent = { ...initialContent, dialogues };
-         const fullSavedVersion = saveScenarioToHistory(scenarioName, fullContent);
-         
-         // Update UI safely
-         setCurrentContent(fullSavedVersion);
-         setCurrentVersions(prev => {
-             const updated = [...prev];
-             // The first item is the one we just added/updated
-             updated[0] = fullSavedVersion;
-             return updated;
-         });
       } catch (bgError) {
          console.error("Background dialogue generation failed", bgError);
-         // We don't crash the app, user just sees empty dialogues with option to retry maybe?
-         // For now, `isGeneratingDialogues` will flip to false and they'll see empty state
       } finally {
          setIsGeneratingDialogues(false);
       }
