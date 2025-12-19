@@ -336,7 +336,10 @@ export default function App() {
 
     try {
       // Step 1: Generate Vocab & Expressions (Fast)
-      const partialContent = await generateVocabularyAndExpressions(scenarioName, language, overrideKey || customApiKey || undefined);
+      // Now also generates and returns the specific ROLES for this scenario
+      const partialData = await generateVocabularyAndExpressions(scenarioName, language, overrideKey || customApiKey || undefined);
+      
+      const roles = partialData.roles || { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' };
       
       // If we used the free quota (no custom key), increment usage
       if (!overrideKey && !customApiKey) {
@@ -355,8 +358,8 @@ export default function App() {
       // Construct a valid ScenarioContent object
       const initialContent: ScenarioContent = {
          scenarioName: scenarioName,
-         vocabulary: partialContent.vocabulary || [],
-         expressions: partialContent.expressions || [],
+         vocabulary: partialData.vocabulary || [],
+         expressions: partialData.expressions || [],
          dialogues: initialPlaceholders, 
          timestamp: Date.now()
       };
@@ -386,6 +389,7 @@ export default function App() {
          await generateDialoguesWithCallback(
             scenarioName, 
             initialContent.vocabulary, 
+            roles, // Pass the determined roles to step 2
             (index, sceneData) => {
                 // INCREMENTAL UPDATE:
                 

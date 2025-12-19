@@ -129,16 +129,27 @@ const findTitle = (obj: any, defaultTitle: string): string => {
 
 // --- NEW SPLIT GENERATION FUNCTIONS ---
 
-// STEP 1: Generate Vocabulary and Expressions (FAST)
-export const generateVocabularyAndExpressions = async (scenario: string, language: Language = 'zh', customApiKey?: string): Promise<Partial<ScenarioContent>> => {
+// STEP 1: Generate Vocabulary, Expressions AND ROLES (FAST)
+export const generateVocabularyAndExpressions = async (
+  scenario: string, 
+  language: Language = 'zh', 
+  customApiKey?: string
+): Promise<Partial<ScenarioContent> & { roles?: { user: string, partner: string } }> => {
   const ai = getAiInstance(customApiKey);
 
+  const langName = language === 'zh' ? 'Simplified Chinese' : 'English';
+
   const prompt = `
-    Create a Japanese language study list for the scenario: "${scenario}".
+    Analyze the scenario: "${scenario}".
     
-    Requirements:
-    1. Vocabulary: 25-30 essential words. Kana, Romaji, Meanings (English & Simplified Chinese).
-    2. Expressions: 10-15 common useful phrases. Kana, Romaji, Meanings (English & Simplified Chinese).
+    Task 1: Define the two specific roles for this roleplay conversation.
+    - userRole: The learner/protagonist (e.g., "International Student", "Tourist", "Patient"). Name MUST be in ${langName}.
+    - partnerRole: The person they are talking to (e.g., "Neighbor", "Waiter", "Doctor"). Name MUST be in ${langName}.
+    - Ensure these roles make sense together for the context "${scenario}".
+    
+    Task 2: Create a Japanese language study list.
+    - Vocabulary: 25-30 essential words.
+    - Expressions: 10-15 common useful phrases.
     
     Output strictly in JSON.
   `;
@@ -152,6 +163,14 @@ export const generateVocabularyAndExpressions = async (scenario: string, languag
         responseSchema: {
           type: Type.OBJECT,
           properties: {
+            setup: {
+               type: Type.OBJECT,
+               properties: {
+                  userRole: { type: Type.STRING, description: `The user's role name in ${langName}` },
+                  partnerRole: { type: Type.STRING, description: `The partner's role name in ${langName}` }
+               },
+               required: ["userRole", "partnerRole"]
+            },
             vocabulary: {
               type: Type.ARRAY,
               items: {
@@ -199,21 +218,28 @@ export const generateVocabularyAndExpressions = async (scenario: string, languag
 
     if (response.text) {
       const cleanText = cleanJsonText(response.text);
-      const result = JSON.parse(cleanText) as Partial<ScenarioContent>;
-      result.scenarioName = scenario;
-      result.dialogues = []; // Initialize empty
-      return result;
+      const result = JSON.parse(cleanText);
+      
+      return {
+        scenarioName: scenario,
+        vocabulary: result.vocabulary || [],
+        expressions: result.expressions || [],
+        dialogues: [],
+        // Return the determined roles to be passed to step 2
+        roles: result.setup ? { user: result.setup.userRole, partner: result.setup.partnerRole } : undefined
+      };
     }
   } catch (e) {
     console.error("Vocab generation error", e);
   }
   
-  // Fallback if vocab generation fails completely
+  // Fallback
   return {
     scenarioName: scenario,
     vocabulary: [],
     expressions: [],
-    dialogues: []
+    dialogues: [],
+    roles: { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' }
   };
 };
 
@@ -223,6 +249,7 @@ const generateSingleScene = async (
   sceneIndex: number, // 1, 2, or 3
   sceneType: string, // "Intro", "Process", "Conclusion"
   contextVocab: string,
+  roles: { user: string, partner: string },
   language: Language,
   customApiKey?: string,
   attempt: number = 1
@@ -244,17 +271,20 @@ const generateSingleScene = async (
     Goal: ${specificInstructions}.
     Context: ${contextVocab}.
     
+    DEFINED ROLES (STRICTLY ENFORCE):
+    - Speaker A (User/Protagonist): "${roles.user}"
+    - Speaker B (Partner/Native): "${roles.partner}"
+    
     Output strictly valid JSON (No Markdown).
     
     CRITICAL RULES:
     1. "title": Short, specific title for this scene in ${titleLanguage}. DO NOT include the scenario name "${scenario}" in the title.
     2. "lines": Array of dialogue turns.
     3. "speaker": MUST be strictly "A" or "B". 
-       - Speaker "A" is the User/Learner (Protagonist).
-       - Speaker "B" is the Counterpart (Native Speaker).
-    4. "roleName": Display name in ${titleLanguage}. 
-       - For A: "我" (Me) or "User".
-       - For B: Specific role (e.g. "店员", "上司", "Staff", "Manager"). Keep it consistent.
+    4. "roleName":
+       - If speaker is "A", set roleName to "${roles.user}".
+       - If speaker is "B", set roleName to "${roles.partner}".
+       - DO NOT invent new role names. Use exactly provided names.
 
     Structure:
     {
@@ -262,7 +292,7 @@ const generateSingleScene = async (
       "lines": [
         {
           "speaker": "A",
-          "roleName": "我",
+          "roleName": "${roles.user}",
           "japanese": "...",
           "kana": "...",
           "romaji": "...",
@@ -315,40 +345,35 @@ const generateSingleScene = async (
       }
 
       // --- TITLE CLEANING LOGIC ---
-      // Remove the main scenario name if the AI included it (e.g., "Dining: Opening" -> "Opening")
       try {
         const scenarioNamePattern = new RegExp(`^${scenario.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:\\-]?\\s*`, 'i');
         title = title.replace(scenarioNamePattern, '');
-        // Also remove "Scene X" prefix if redundant
         title = title.replace(/^(Scene|场景)\s*\d+\s*[:\\-]?\s*/i, '');
       } catch (err) {
-        // Fallback if regex fails
+        // Fallback
       }
       
       // Sanitize lines to match interface and enforce UI alignment
       const sanitizedLines: DialogueLine[] = lines.map((l: any) => {
           // Normalize speaker to strictly A or B
-          // If the AI returns a name like "Student" in speaker, map it to A
-          let cleanSpeaker: 'A' | 'B' = 'A'; // Default to A
-          
+          let cleanSpeaker: 'A' | 'B' = 'A';
           if (l.speaker === 'B' || l.speaker === 'b') cleanSpeaker = 'B';
-          else if (l.speaker === 'A' || l.speaker === 'a') cleanSpeaker = 'A';
-          else {
-             // Heuristic fallback: if roleName implies 'me' or 'user' -> A, else B
+          
+          // Fallback heuristic if Model fails strict A/B (rare now with prompt fix)
+          if (!l.speaker) {
              const r = (l.roleName || '').toLowerCase();
-             if (r.includes('me') || r.includes('user') || r.includes('student') || r.includes('我')) {
+             // Check if role name matches the user role defined
+             if (r === roles.user.toLowerCase() || r.includes('me') || r.includes('user') || r.includes('我')) {
                  cleanSpeaker = 'A';
              } else {
-                 cleanSpeaker = 'B'; // Default undefined to partner to be safe? Or stick to A.
-                 // Actually, let's assume if it's not explicitly A, it's B (Counterpart) 
-                 // UNLESS it's the first line, which is usually A. 
-                 // But safer to let Prompt instruction handle it.
+                 cleanSpeaker = 'B';
              }
           }
 
           return {
             speaker: cleanSpeaker,
-            roleName: l.roleName || (cleanSpeaker === 'A' ? 'Me' : 'Partner'),
+            // Force the consistent role name from params, ignore hallucinations if any
+            roleName: cleanSpeaker === 'A' ? roles.user : roles.partner,
             japanese: l.japanese || l.text || '...',
             kana: l.kana || '',
             romaji: l.romaji || '',
@@ -367,7 +392,7 @@ const generateSingleScene = async (
     console.warn(`Scene ${sceneIndex} attempt ${attempt} failed:`, error);
     if (attempt < 2) {
       // Retry once
-      return generateSingleScene(scenario, sceneIndex, sceneType, contextVocab, language, customApiKey, attempt + 1);
+      return generateSingleScene(scenario, sceneIndex, sceneType, contextVocab, roles, language, customApiKey, attempt + 1);
     }
     
     // FALLBACK OBJECT
@@ -375,7 +400,7 @@ const generateSingleScene = async (
       title: `Scene ${sceneIndex} (Unavailable)`,
       lines: [{
         speaker: "B",
-        roleName: "System",
+        roleName: roles.partner || "System",
         japanese: "申し訳ありません。生成に時間がかかりすぎました。",
         kana: "もうしわけありません。せいせいにじかんがかかりすぎました。",
         romaji: "Moushiwake arimasen. Seisei ni jikan ga kakarisugimashita.",
@@ -392,6 +417,7 @@ const generateSingleScene = async (
 export const generateDialoguesWithCallback = async (
   scenario: string, 
   contextVocabulary: VocabularyItem[], 
+  roles: { user: string, partner: string },
   onSceneComplete: (index: number, scene: DialogueSection) => void,
   language: Language = 'zh', 
   customApiKey?: string
@@ -401,16 +427,15 @@ export const generateDialoguesWithCallback = async (
 
   // Fire requests. We do NOT await Promise.all here because we want to trigger callbacks individually.
   
-  const p1 = generateSingleScene(scenario, 1, "Intro", vocabList, language, customApiKey)
+  const p1 = generateSingleScene(scenario, 1, "Intro", vocabList, roles, language, customApiKey)
     .then(scene => onSceneComplete(0, scene));
     
-  const p2 = generateSingleScene(scenario, 2, "Process", vocabList, language, customApiKey)
+  const p2 = generateSingleScene(scenario, 2, "Process", vocabList, roles, language, customApiKey)
     .then(scene => onSceneComplete(1, scene));
     
-  const p3 = generateSingleScene(scenario, 3, "Conclusion", vocabList, language, customApiKey)
+  const p3 = generateSingleScene(scenario, 3, "Conclusion", vocabList, roles, language, customApiKey)
     .then(scene => onSceneComplete(2, scene));
 
-  // We await all to know when the whole process is effectively "done" for the caller
   await Promise.all([p1, p2, p3]);
 };
 
@@ -418,6 +443,7 @@ export const generateDialoguesWithCallback = async (
 export const generateDialoguesOnly = async (
   scenario: string, 
   contextVocabulary: VocabularyItem[], 
+  roles: { user: string, partner: string },
   language: Language = 'zh', 
   customApiKey?: string
 ): Promise<DialogueSection[]> => {
@@ -425,6 +451,7 @@ export const generateDialoguesOnly = async (
     await generateDialoguesWithCallback(
         scenario, 
         contextVocabulary, 
+        roles,
         (idx, scene) => { results[idx] = scene; },
         language, 
         customApiKey
@@ -437,7 +464,8 @@ export const generateDialoguesOnly = async (
 export const generateScenarioContent = async (scenario: string, language: Language = 'zh', customApiKey?: string): Promise<ScenarioContent> => {
    // Implementation reused for single-shot generation (e.g. from history regeneration)
    const part1 = await generateVocabularyAndExpressions(scenario, language, customApiKey);
-   const part2 = await generateDialoguesOnly(scenario, part1.vocabulary || [], language, customApiKey);
+   const roles = part1.roles || { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' };
+   const part2 = await generateDialoguesOnly(scenario, part1.vocabulary || [], roles, language, customApiKey);
    
    return {
      scenarioName: scenario,
