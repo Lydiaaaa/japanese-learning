@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { ScenarioContent, Language, ProgressCallback, VoiceEngine, VocabularyItem } from "../types";
+import { ScenarioContent, Language, ProgressCallback, VoiceEngine, VocabularyItem, DialogueSection } from "../types";
 
 // Helper to safely get the API Key in both Vite (production) and AI Studio (preview) environments
 const getSystemApiKey = () => {
@@ -76,8 +76,8 @@ export const generateVocabularyAndExpressions = async (scenario: string, languag
     Create a Japanese language study list for the scenario: "${scenario}".
     
     Requirements:
-    1. Vocabulary: 30-35 essential words. Kana, Romaji, Meanings (English & Simplified Chinese).
-    2. Expressions: 15-20 common useful phrases. Kana, Romaji, Meanings (English & Simplified Chinese).
+    1. Vocabulary: 25-30 essential words. Kana, Romaji, Meanings (English & Simplified Chinese).
+    2. Expressions: 10-15 common useful phrases. Kana, Romaji, Meanings (English & Simplified Chinese).
     
     Output strictly in JSON.
   `;
@@ -144,32 +144,34 @@ export const generateVocabularyAndExpressions = async (scenario: string, languag
   throw new Error("Failed to generate vocabulary");
 };
 
-// STEP 2: Generate Dialogues (SLOWER, runs in background)
-export const generateDialoguesOnly = async (
-  scenario: string, 
-  contextVocabulary: VocabularyItem[], 
-  language: Language = 'zh', 
+// INTERNAL HELPER: Generate a SINGLE scene
+// This reduces the complexity for the model and allows parallel execution.
+const generateSingleScene = async (
+  scenario: string,
+  sceneIndex: number, // 1, 2, or 3
+  sceneType: string, // "Intro", "Process", "Conclusion"
+  contextVocab: string,
   customApiKey?: string
-): Promise<any[]> => {
+): Promise<DialogueSection> => {
   const ai = getAiInstance(customApiKey);
 
-  // Context injection: We pass the vocab list so the dialogue uses the words we just generated
-  const vocabList = contextVocabulary.slice(0, 15).map(v => v.term).join(", ");
+  const specificInstructions = {
+    1: "Scene 1: Opening/Request. Speaker A arrives or calls. Establish the goal.",
+    2: "Scene 2: Interaction/Details. Verifying information, asking checking questions, handling a small complication or detail.",
+    3: "Scene 3: Closing/Farewell. Confirming completion, thanking, and saying goodbye. MUST NOT end with a question."
+  }[sceneIndex] || "";
 
   const prompt = `
-    Write a realistic Japanese conversation for: "${scenario}".
+    Write ONE specific dialogue scene (Part ${sceneIndex} of 3) for the scenario: "${scenario}".
     
-    Context: Incorporate some of these words if natural: ${vocabList}.
-
-    Structure: STRICTLY 3 distinct chronological sub-scenes.
-    1. Introduction/Request.
-    2. Process/Interaction (Longest part).
-    3. Conclusion/Farewell (MUST end with a closing statement like "Arigatou", not a question).
+    Context Words to use if natural: ${contextVocab}
     
-    Rules:
-    - Each sub-scene needs 6-8 lines.
-    - Speaker A and B.
-    - Full Kana/Romaji/Translation (English & Chinese) for every line.
+    Focus: ${specificInstructions}
+    
+    Requirements:
+    - 6-8 lines of dialogue between Speaker A and Speaker B.
+    - Natural Japanese suitable for daily life (use Keigo if 'Staff' involved).
+    - Provide full Kana, Romaji, and Translations.
   `;
 
   const response = await ai.models.generateContent({
@@ -180,32 +182,24 @@ export const generateDialoguesOnly = async (
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          dialogues: {
+          title: { type: Type.STRING, description: `Title for Scene ${sceneIndex}` },
+          lines: {
             type: Type.ARRAY,
             items: {
               type: Type.OBJECT,
               properties: {
-                title: { type: Type.STRING },
-                lines: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      speaker: { type: Type.STRING, enum: ["A", "B"] },
-                      roleName: { type: Type.STRING },
-                      japanese: { type: Type.STRING },
-                      kana: { type: Type.STRING },
-                      romaji: { type: Type.STRING },
-                      translation: { 
-                        type: Type.OBJECT, 
-                        properties: {
-                          en: { type: Type.STRING },
-                          zh: { type: Type.STRING }
-                        },
-                        required: ["en", "zh"]
-                      }
-                    }
-                  }
+                speaker: { type: Type.STRING, enum: ["A", "B"] },
+                roleName: { type: Type.STRING },
+                japanese: { type: Type.STRING },
+                kana: { type: Type.STRING },
+                romaji: { type: Type.STRING },
+                translation: { 
+                  type: Type.OBJECT, 
+                  properties: {
+                    en: { type: Type.STRING },
+                    zh: { type: Type.STRING }
+                  },
+                  required: ["en", "zh"]
                 }
               }
             }
@@ -216,10 +210,37 @@ export const generateDialoguesOnly = async (
   });
 
   if (response.text) {
-    const result = JSON.parse(response.text);
-    return result.dialogues || [];
+    return JSON.parse(response.text) as DialogueSection;
   }
-  throw new Error("Failed to generate dialogues");
+  throw new Error(`Failed to generate scene ${sceneIndex}`);
+};
+
+// STEP 2: Generate Dialogues (OPTIMIZED: PARALLEL)
+export const generateDialoguesOnly = async (
+  scenario: string, 
+  contextVocabulary: VocabularyItem[], 
+  language: Language = 'zh', 
+  customApiKey?: string
+): Promise<DialogueSection[]> => {
+  
+  // Prepare context (lighter payload)
+  const vocabList = contextVocabulary.slice(0, 8).map(v => v.term).join(", ");
+
+  // Fire 3 requests in PARALLEL
+  // This reduces wait time to the slowest single request (~5-8s) instead of sum (~20s+)
+  try {
+    const [scene1, scene2, scene3] = await Promise.all([
+      generateSingleScene(scenario, 1, "Intro", vocabList, customApiKey),
+      generateSingleScene(scenario, 2, "Process", vocabList, customApiKey),
+      generateSingleScene(scenario, 3, "Conclusion", vocabList, customApiKey)
+    ]);
+
+    return [scene1, scene2, scene3];
+  } catch (error) {
+    console.error("Parallel generation failed, falling back to sequential or error", error);
+    // If parallel fails (rare), we could try sequential, but for now just throw
+    throw error;
+  }
 };
 
 // Keep the old full generation function for fallback/regenerate all if needed
