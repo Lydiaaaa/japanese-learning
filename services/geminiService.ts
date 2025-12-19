@@ -69,8 +69,9 @@ const getAiInstance = (customKey?: string) => {
 export const generateScenarioContent = async (scenario: string, language: Language = 'zh', customApiKey?: string): Promise<ScenarioContent> => {
   const ai = getAiInstance(customApiKey);
 
-  // Updated Prompt to explicitly request full pronunciation data AND bilingual translations
-  // Added specific instructions for dialogue length and depth.
+  // Updated Prompt:
+  // 1. Strictly enforces 3 distinct sub-scenes via specific naming instructions.
+  // 2. Adds explicit instructions to ensure the conversation has a proper closing (no ending on questions).
   const prompt = `
     Create a comprehensive Japanese language study guide for the specific scenario: "${scenario}".
     
@@ -79,9 +80,16 @@ export const generateScenarioContent = async (scenario: string, language: Langua
     
     2. Expressions: 15-20 common useful phrases/sentence patterns. Include full reading in Kana and Romaji. Provide meanings in BOTH English and Simplified Chinese.
     
-    3. Dialogues: Create a detailed, realistic, and extensive conversation flow broken down into 3 distinct chronological sub-scenes.
-       - CRITICAL: Each sub-scene MUST contain at least 6-8 lines of back-and-forth dialogue to fully explore the interaction (Total 18-24 lines minimum).
-       - For service scenarios (e.g., banking, hotels, government), include realistic details like confirming information, asking clarifying questions, handling small problems, or polite formalities. Do not make the conversation too simple or abrupt.
+    3. Dialogues: Create a realistic conversation flow STRICTLY divided into 3 distinct chronological sub-scenes (Items in the 'dialogues' array).
+       
+       - Sub-scene 1: Introduction / Request (Start of interaction).
+       - Sub-scene 2: The Process / Details / Complications (The longest part, verifying details, filling forms, checking IDs).
+       - Sub-scene 3: Conclusion / Farewell (End of interaction).
+       
+       CRITICAL RULES FOR DIALOGUES:
+       - Each sub-scene MUST contain at least 6-8 lines of back-and-forth dialogue (A->B->A->B...).
+       - The conversation MUST NOT end abruptly. The final sub-scene MUST include a proper conclusion (e.g., "Thank you," "Here is your card," "Goodbye"). Do NOT end the final scene with a question.
+       - Use appropriate Keigo (Honorifics) for service staff.
        - Include full reading in Kana and Romaji for every line.
        - Provide translations in BOTH English and Simplified Chinese.
     
