@@ -190,7 +190,11 @@ export const DialoguePlayer: React.FC<Props> = ({
   // It is loading if:
   // 1. It is undefined/null (initial generation)
   // 2. We are explicitly retrying this index locally
-  const isSectionLoading = !activeSection || retryingSceneIdx === activeSectionIdx;
+  // 3. We are in global generation mode AND the lines are empty (placeholder state)
+  const isSectionLoading = 
+    !activeSection || 
+    retryingSceneIdx === activeSectionIdx || 
+    (isGenerating && (!activeSection.lines || activeSection.lines.length === 0));
 
   return (
     <div className="flex flex-col md:flex-row gap-6 h-full items-start">
@@ -198,21 +202,24 @@ export const DialoguePlayer: React.FC<Props> = ({
       <div className="md:w-64 flex-shrink-0 flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-2 md:pb-0 no-scrollbar md:sticky md:top-6 self-start z-10">
         {displaySections.map((sec, idx) => {
           const isActive = idx === activeSectionIdx;
-          const isLoaded = !!sec;
+          // A section is "Loaded" if it exists and has lines.
+          const isLoaded = sec && sec.lines && sec.lines.length > 0;
+          // A section is "Processing" if we are generating AND it's not loaded yet.
+          const isProcessing = isGenerating && (!sec || !sec.lines || sec.lines.length === 0);
           
           return (
             <button
               key={idx}
-              disabled={!isLoaded && idx !== activeSectionIdx} // Can click if active (even if loading) or if loaded
+              disabled={!isLoaded && !isProcessing && idx !== activeSectionIdx} 
               onClick={() => setActiveSectionIdx(idx)}
               className={`flex-shrink-0 flex items-center gap-3 p-3 rounded-xl border text-left transition-all relative overflow-hidden ${
                 isActive 
                   ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
                   : 'bg-white border-slate-100 text-slate-600 hover:border-indigo-200 hover:bg-slate-50'
-              } ${!isLoaded && !isActive ? 'opacity-50 cursor-not-allowed' : ''}`}
+              } ${!isLoaded && !isActive && !isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {/* Progress shimmer for loading state */}
-              {!isLoaded && (
+              {isProcessing && (
                  <div className="absolute inset-0 bg-slate-200/30 animate-pulse"></div>
               )}
 
@@ -224,7 +231,7 @@ export const DialoguePlayer: React.FC<Props> = ({
                   {t.scene} {idx + 1}
                 </div>
                 <div className={`font-bold text-sm truncate ${isActive ? 'text-white' : 'text-slate-700'}`}>
-                  {isLoaded ? sec.title : (idx === 0 ? "..." : "...")}
+                  {sec ? sec.title : "..."}
                 </div>
               </div>
             </button>
