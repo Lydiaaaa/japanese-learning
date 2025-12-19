@@ -39,10 +39,10 @@ const firebaseConfig = {
 // ---------------------------------------------------------
 // ADMIN CONFIGURATION (管理员白名单)
 // Add your Google Account email(s) here to bypass daily limits
-// 请在这里填入您的 Google 邮箱，登录后即可无限使用
 // ---------------------------------------------------------
 const ADMIN_EMAILS = [
-  "lydialmz610@gmail.com" // <--- 请修改这里为您的邮箱
+  "lydialmz610@gmail.com", // <--- 在这里填入您的 Google 邮箱，登录后即可无限使用
+  "your-email@gmail.com"   // 可以添加多个账号
 ];
 
 // Initialize Firebase
@@ -89,6 +89,11 @@ export const GUEST_USER = {
   phoneNumber: null,
   providerId: 'guest'
 } as unknown as FirebaseUser;
+
+// Helper to check admin status
+export const checkIsAdmin = (user: User | null): boolean => {
+  return !!(user && user.email && ADMIN_EMAILS.includes(user.email));
+};
 
 export const loginWithGoogle = async () => {
   if (!isConfigured || !auth) {
@@ -279,7 +284,7 @@ const getTodayDateString = () => {
 
 export const checkDailyQuota = async (user: User | null): Promise<{ allowed: boolean; remaining: number }> => {
   // 1. ADMIN BYPASS CHECK
-  if (user && user.email && ADMIN_EMAILS.includes(user.email)) {
+  if (checkIsAdmin(user)) {
     return { allowed: true, remaining: 9999 };
   }
 
@@ -314,7 +319,7 @@ export const checkDailyQuota = async (user: User | null): Promise<{ allowed: boo
 
 export const incrementDailyQuota = async (user: User | null) => {
   // 1. ADMIN BYPASS CHECK - Admins don't consume quota
-  if (user && user.email && ADMIN_EMAILS.includes(user.email)) {
+  if (checkIsAdmin(user)) {
     return;
   }
 

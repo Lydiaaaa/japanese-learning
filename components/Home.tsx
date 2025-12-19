@@ -68,13 +68,14 @@ export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, lan
   return (
     <div className="h-full overflow-y-auto no-scrollbar">
       <div className="max-w-4xl mx-auto p-4 md:p-6">
-        {/* UPDATED HEADER SPACING: Increased mt-12 (mobile) and mt-24 (desktop) for better spacing */}
-        <header className="mb-8 md:mb-12 text-center mt-12 md:mt-24">
+        {/* HEADER SECTION: Fixed mt-16 (4rem) on desktop, and mt-10 for mobile */}
+        <header className="mb-8 md:mb-12 text-center mt-10 md:mt-16">
           <h1 className="text-3xl md:text-4xl font-bold text-slate-800 mb-2">{t.title}</h1>
-          <p className="text-slate-500 text-base md:text-lg max-w-lg mx-auto">{t.subtitle}</p>
+          {/* OPTIMIZATION: Increased max-w to 2xl to prevent awkward line breaks on desktop in English */}
+          <p className="text-slate-500 text-base md:text-lg max-w-2xl mx-auto px-4 md:px-0">{t.subtitle}</p>
         </header>
 
-        {/* Custom Input Hero - UPDATED UI: Stacked on mobile */}
+        {/* Custom Input Hero */}
         <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 mb-8 md:mb-10">
           <label className="block text-sm font-medium text-slate-700 mb-2">
             {t.customLabel}

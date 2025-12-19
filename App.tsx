@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Home } from './components/Home';
 import { StudyView } from './components/StudyView';
@@ -8,10 +7,20 @@ import { UserMenu } from './components/UserMenu';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine } from './types';
 import { generateScenarioContent } from './services/geminiService';
-import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario, User, checkDailyQuota, incrementDailyQuota } from './services/firebase';
+import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario, User, checkDailyQuota, incrementDailyQuota, checkIsAdmin } from './services/firebase';
 import { Loader2, AlertCircle, RefreshCw, Globe, Star, Settings, Type, Zap, Key } from 'lucide-react';
 import { UI_TEXT } from './constants';
 import { SaynarioLogo } from './components/Logo';
+
+// Helper to detect initial language
+const getInitialLanguage = (): Language => {
+  const saved = localStorage.getItem('nihongo_language');
+  if (saved === 'zh' || saved === 'en') return saved as Language;
+  
+  const sysLang = navigator.language || 'en';
+  // Check for zh-CN, zh-TW, zh-HK, etc.
+  return sysLang.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+};
 
 export default function App() {
   const [viewState, setViewState] = useState<ViewState>(ViewState.HOME);
@@ -23,8 +32,8 @@ export default function App() {
   const [loadingScenarioName, setLoadingScenarioName] = useState<string>('');
   const [loadingStep, setLoadingStep] = useState<number>(0);
   
-  // Global State
-  const [language, setLanguage] = useState<Language>('zh');
+  // Global State with intelligent default
+  const [language, setLanguage] = useState<Language>(getInitialLanguage());
   const [notation, setNotation] = useState<Notation>('kana');
   const [voiceEngine, setVoiceEngine] = useState<VoiceEngine>('system');
   const [customApiKey, setCustomApiKey] = useState<string | null>(null);
@@ -178,10 +187,11 @@ export default function App() {
       localStorage.setItem('nihongo_scenarios', JSON.stringify(scenarioHistory));
     }
     
+    localStorage.setItem('nihongo_language', language);
     localStorage.setItem('nihongo_notation', notation);
     localStorage.setItem('nihongo_voice_engine', voiceEngine);
 
-  }, [savedItems, scenarioHistory, user, isSyncing, notation, voiceEngine]);
+  }, [savedItems, scenarioHistory, user, isSyncing, language, notation, voiceEngine]);
 
   const toggleSavedItem = (item: SavedItem) => {
     setSavedItems(prev => {
@@ -272,19 +282,24 @@ export default function App() {
   };
 
   const checkQuotaAndGenerate = async (scenarioName: string) => {
+    // 0. Check if user is admin (Whitelist)
+    const isAdmin = checkIsAdmin(user);
+
     // 1. If user has Custom Key, skip quota check
     if (customApiKey) {
       executeScenarioGeneration(scenarioName, customApiKey);
       return;
     }
 
-    // 2. If user hasn't set preference (First Time), show modal
-    if (!hasSetApiPreference) {
+    // 2. If user hasn't set preference (First Time) AND is not admin, show modal.
+    // Admins bypass this and default to system generation.
+    if (!hasSetApiPreference && !isAdmin) {
       setShowApiKeyModal(true);
       return;
     }
 
     // 3. Check Quota
+    // If admin, this returns { allowed: true, remaining: 9999 }
     const { allowed } = await checkDailyQuota(user);
     if (allowed) {
       executeScenarioGeneration(scenarioName);
