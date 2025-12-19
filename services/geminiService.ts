@@ -164,20 +164,32 @@ const generateSingleScene = async (
 
   const titleLanguage = language === 'zh' ? "Simplified Chinese (简体中文)" : "English";
 
-  // Detailed Prompt to fix Language and Structure
+  // More explicit prompt with JSON example to improve model compliance
   const prompt = `
     Write Scene ${sceneIndex}/3 for: "${scenario}".
     Type: ${sceneType}.
     Goal: ${specificInstructions}.
     Context: ${contextVocab}.
     
-    CRITICAL REQUIREMENTS:
-    1. The "title" MUST be in ${titleLanguage}. Do NOT use Japanese for the title.
-    2. The "lines" array must contain 6-8 dialogue turns between Speaker A and B.
-    
-    Output JSON:
-    - title: Brief title in ${titleLanguage}.
-    - lines: Array of objects with fields: speaker, roleName, japanese, kana, romaji, translation (en, zh).
+    Output strictly valid JSON.
+    Structure Example:
+    {
+      "title": "Title in ${titleLanguage}",
+      "lines": [
+        {
+          "speaker": "A",
+          "roleName": "Student",
+          "japanese": "こんにちは",
+          "kana": "こんにちは",
+          "romaji": "Konnichiwa",
+          "translation": { "en": "Hello", "zh": "你好" }
+        }
+      ]
+    }
+
+    Requirements:
+    1. Title MUST be in ${titleLanguage}.
+    2. 6-8 dialogue turns.
   `;
 
   try {
@@ -226,14 +238,45 @@ const generateSingleScene = async (
     const response = await Promise.race([fetchPromise, timeoutPromise]);
 
     if (response.text) {
-      const parsed = JSON.parse(response.text) as any;
+      let parsed: any;
+      try {
+        parsed = JSON.parse(response.text);
+      } catch (e) {
+        throw new Error("Invalid JSON");
+      }
       
-      // Strict validation to prevent frontend crashes
-      if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.lines)) {
+      // Robust Parsing Logic: Find the lines array wherever it might be
+      let lines = parsed.lines;
+      let title = parsed.title || `Scene ${sceneIndex}`;
+
+      if (!lines || !Array.isArray(lines)) {
+        // Fallback: Check common alternatives key names
+        if (Array.isArray(parsed.dialogue)) lines = parsed.dialogue;
+        else if (Array.isArray(parsed.script)) lines = parsed.script;
+        else if (Array.isArray(parsed.conversation)) lines = parsed.conversation;
+        // Fallback: Check if the root object itself is the array
+        else if (Array.isArray(parsed)) lines = parsed;
+      }
+
+      if (!lines || !Array.isArray(lines)) {
+         console.warn("Missing lines in response:", parsed);
          throw new Error("Invalid response format: 'lines' array is missing");
       }
       
-      return parsed as DialogueSection;
+      // Sanitize lines to match interface
+      const sanitizedLines = lines.map((l: any) => ({
+          speaker: l.speaker || 'A',
+          roleName: l.roleName || (l.speaker === 'A' ? 'User' : 'Partner'),
+          japanese: l.japanese || l.text || '...',
+          kana: l.kana || '',
+          romaji: l.romaji || '',
+          translation: l.translation || { en: '', zh: '' }
+      }));
+
+      return {
+          title,
+          lines: sanitizedLines
+      };
     }
     throw new Error("Empty response");
 
@@ -243,15 +286,21 @@ const generateSingleScene = async (
       // Retry once
       return generateSingleScene(scenario, sceneIndex, sceneType, contextVocab, language, customApiKey, attempt + 1);
     }
-    // Fallback if failed twice - return an error object that matches the interface
+    
+    // FALLBACK OBJECT: Return a valid object so the UI doesn't crash or show "Unavailable"
+    // This allows the user to at least see an error message in the dialogue bubble.
     return {
-      title: `Scene ${sceneIndex} (Generation Failed)`,
+      title: `Scene ${sceneIndex} (Error)`,
       lines: [{
         speaker: "A",
-        japanese: "エラーが発生しました。再試行してください。",
-        kana: "えらーがはっせいしました。さいしこうしてください。",
-        romaji: "Eraa ga hassei shimashita.",
-        translation: { en: "Generation failed. Please retry.", zh: "生成超时或失败，请重试。" }
+        roleName: "System",
+        japanese: "すみません、生成に失敗しました。",
+        kana: "すみません、せいせいにしっぱいしました。",
+        romaji: "Sumimasen, seisei ni shippai shimashita.",
+        translation: { 
+            en: "Sorry, generation failed. Please try regenerating.", 
+            zh: "抱歉，生成失败。请尝试重新生成。" 
+        }
       }]
     };
   }

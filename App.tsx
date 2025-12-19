@@ -206,8 +206,14 @@ export default function App() {
   };
 
   const saveScenarioToHistory = (id: string, content: ScenarioContent) => {
+    // Safety check: remove undefined dialogues to prevent firestore crash
+    const safeContent = {
+        ...content,
+        dialogues: content.dialogues.filter(Boolean)
+    };
+    
     const timestamp = Date.now();
-    const contentWithTime = { ...content, scenarioName: id, timestamp };
+    const contentWithTime = { ...safeContent, scenarioName: id, timestamp };
     
     setScenarioHistory(prev => {
       const existingIndex = prev.findIndex(item => item.id === id);
@@ -382,14 +388,19 @@ export default function App() {
             initialContent.vocabulary, 
             (index, sceneData) => {
                 // INCREMENTAL UPDATE:
-                // Replace the placeholder at the specific index
-                incomingDialogues[index] = sceneData;
+                
+                // Safety: Ensure sceneData is not undefined (from fallback logic)
+                if (sceneData) {
+                    incomingDialogues[index] = sceneData;
+                }
+                
+                // Create a clean copy without undefined holes
+                const safeDialogues = incomingDialogues.map(d => d || { title: "Error", lines: [] });
                 
                 // We create a new object to trigger React re-render
-                // IMPORTANT: incomingDialogues now has NO holes/undefined values
                 const updatedContent = { 
                     ...initialContent, 
-                    dialogues: [...incomingDialogues] 
+                    dialogues: safeDialogues 
                 };
 
                 // Update current view
