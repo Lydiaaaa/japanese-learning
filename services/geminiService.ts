@@ -150,6 +150,7 @@ const generateSingleScene = async (
   sceneIndex: number, // 1, 2, or 3
   sceneType: string, // "Intro", "Process", "Conclusion"
   contextVocab: string,
+  language: Language,
   customApiKey?: string,
   attempt: number = 1
 ): Promise<DialogueSection> => {
@@ -161,21 +162,28 @@ const generateSingleScene = async (
     3: "Scene 3: Closing. Completion/Farewell. NO trailing questions."
   }[sceneIndex] || "";
 
-  // Simplified prompt to reduce model "overthinking"
+  const titleLanguage = language === 'zh' ? "Simplified Chinese (简体中文)" : "English";
+
+  // Detailed Prompt to fix Language and Structure
   const prompt = `
     Write Scene ${sceneIndex}/3 for: "${scenario}".
     Type: ${sceneType}.
     Goal: ${specificInstructions}.
     Context: ${contextVocab}.
     
+    CRITICAL REQUIREMENTS:
+    1. The "title" MUST be in ${titleLanguage}. Do NOT use Japanese for the title.
+    2. The "lines" array must contain 6-8 dialogue turns between Speaker A and B.
+    
     Output JSON:
-    - title: Brief title.
-    - lines: 6-8 lines, Speaker A/B.
-    - Fields: speaker, roleName, japanese, kana, romaji, translation (en, zh).
+    - title: Brief title in ${titleLanguage}.
+    - lines: Array of objects with fields: speaker, roleName, japanese, kana, romaji, translation (en, zh).
   `;
 
   try {
-    // Timeout wrapper: 25 seconds limit per scene
+    // Increased timeout to 55 seconds to allow for creative writing latency
+    const TIMEOUT_MS = 55000; 
+
     const fetchPromise = ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
@@ -184,7 +192,7 @@ const generateSingleScene = async (
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            title: { type: Type.STRING },
+            title: { type: Type.STRING, description: `The title of the scene in ${titleLanguage}` },
             lines: {
               type: Type.ARRAY,
               items: {
@@ -211,7 +219,6 @@ const generateSingleScene = async (
       }
     });
 
-    const TIMEOUT_MS = 25000; // 25s timeout
     const timeoutPromise = new Promise<never>((_, reject) => 
       setTimeout(() => reject(new Error("Timeout")), TIMEOUT_MS)
     );
@@ -234,17 +241,17 @@ const generateSingleScene = async (
     console.warn(`Scene ${sceneIndex} attempt ${attempt} failed:`, error);
     if (attempt < 2) {
       // Retry once
-      return generateSingleScene(scenario, sceneIndex, sceneType, contextVocab, customApiKey, attempt + 1);
+      return generateSingleScene(scenario, sceneIndex, sceneType, contextVocab, language, customApiKey, attempt + 1);
     }
-    // Fallback if failed twice
+    // Fallback if failed twice - return an error object that matches the interface
     return {
       title: `Scene ${sceneIndex} (Generation Failed)`,
       lines: [{
         speaker: "A",
-        japanese: "エラーが発生しました。",
-        kana: "えらーがはっせいしました。",
+        japanese: "エラーが発生しました。再試行してください。",
+        kana: "えらーがはっせいしました。さいしこうしてください。",
         romaji: "Eraa ga hassei shimashita.",
-        translation: { en: "An error occurred.", zh: "生成失败。" }
+        translation: { en: "Generation failed. Please retry.", zh: "生成超时或失败，请重试。" }
       }]
     };
   }
@@ -264,13 +271,13 @@ export const generateDialoguesWithCallback = async (
   // Fire requests. We do NOT await Promise.all here because we want to trigger callbacks individually.
   // However, we track them to ensure the function keeps running.
   
-  const p1 = generateSingleScene(scenario, 1, "Intro", vocabList, customApiKey)
+  const p1 = generateSingleScene(scenario, 1, "Intro", vocabList, language, customApiKey)
     .then(scene => onSceneComplete(0, scene));
     
-  const p2 = generateSingleScene(scenario, 2, "Process", vocabList, customApiKey)
+  const p2 = generateSingleScene(scenario, 2, "Process", vocabList, language, customApiKey)
     .then(scene => onSceneComplete(1, scene));
     
-  const p3 = generateSingleScene(scenario, 3, "Conclusion", vocabList, customApiKey)
+  const p3 = generateSingleScene(scenario, 3, "Conclusion", vocabList, language, customApiKey)
     .then(scene => onSceneComplete(2, scene));
 
   await Promise.all([p1, p2, p3]);

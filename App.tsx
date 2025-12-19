@@ -337,13 +337,21 @@ export default function App() {
         incrementDailyQuota(user);
       }
 
-      // Construct a valid ScenarioContent object with empty dialogue placeholders (to be filled later)
-      // This allows the UI to render the structure while data flows in.
+      // Pre-fill placeholders for dialogues to prevent "undefined" holes in Firestore
+      // Firestore crashes if an array contains undefined.
+      // We initialize with 3 empty valid objects.
+      const initialPlaceholders: DialogueSection[] = [
+        { title: t.constructing, lines: [] },
+        { title: t.constructing, lines: [] },
+        { title: t.constructing, lines: [] }
+      ];
+
+      // Construct a valid ScenarioContent object
       const initialContent: ScenarioContent = {
          scenarioName: scenarioName,
          vocabulary: partialContent.vocabulary || [],
          expressions: partialContent.expressions || [],
-         dialogues: [], // Empty initially
+         dialogues: initialPlaceholders, 
          timestamp: Date.now()
       };
 
@@ -365,8 +373,8 @@ export default function App() {
       // Step 2: Generate Dialogues with Incremental Callbacks
       setIsGeneratingDialogues(true);
       
-      // Create a mutable copy of dialogues array to update gradually
-      const incomingDialogues: DialogueSection[] = []; 
+      // Initialize our working array with the same placeholders
+      const incomingDialogues: DialogueSection[] = [...initialPlaceholders];
       
       try {
          await generateDialoguesWithCallback(
@@ -374,15 +382,13 @@ export default function App() {
             initialContent.vocabulary, 
             (index, sceneData) => {
                 // INCREMENTAL UPDATE:
-                // When a scene arrives, update state immediately.
+                // Replace the placeholder at the specific index
                 incomingDialogues[index] = sceneData;
                 
                 // We create a new object to trigger React re-render
+                // IMPORTANT: incomingDialogues now has NO holes/undefined values
                 const updatedContent = { 
                     ...initialContent, 
-                    // Filter out undefined/holes if array is sparse during generation, 
-                    // though usually we want to keep order. 
-                    // Let's rely on the DialoguePlayer to handle missing indices nicely.
                     dialogues: [...incomingDialogues] 
                 };
 
