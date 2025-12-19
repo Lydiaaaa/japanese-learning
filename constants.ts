@@ -226,7 +226,15 @@ export const UI_TEXT = {
     confirmDeleteVersion: '确定要删除当前版本的内容吗？无法撤销。',
     loadMore: '获取更多',
     loadingMore: '正在获取...',
-    maxLoaded: '已全部加载'
+    maxLoaded: '已全部加载',
+    
+    // Dialogue specific
+    scene: '场景',
+    writingScene: '正在编写场景...',
+    writingDesc: 'AI 正在根据上下文创作地道的对话内容...',
+    contentUnavailable: '内容生成中断',
+    incompleteResponse: '该场景的对话未能完整生成。',
+    retrySection: '重新生成此段落'
   },
   en: {
     // Home Page Main Title (Position 1)
@@ -297,6 +305,14 @@ export const UI_TEXT = {
     confirmDeleteVersion: 'Are you sure you want to delete this version? This cannot be undone.',
     loadMore: 'Get More',
     loadingMore: 'Loading...',
-    maxLoaded: 'All Loaded'
+    maxLoaded: 'All Loaded',
+
+    // Dialogue specific
+    scene: 'Scene',
+    writingScene: 'Writing Scene...',
+    writingDesc: 'The AI is composing a realistic dialogue for this specific part...',
+    contentUnavailable: 'Content Unavailable',
+    incompleteResponse: 'The AI response for this section was incomplete.',
+    retrySection: 'Retry This Section'
   }
 };

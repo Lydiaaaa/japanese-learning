@@ -7,7 +7,7 @@ import { ScenariosListView } from './components/ScenariosListView';
 import { UserMenu } from './components/UserMenu';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine, DialogueSection } from './types';
-import { generateVocabularyAndExpressions, generateDialoguesWithCallback, generateMoreItems, regenerateSection } from './services/geminiService';
+import { generateVocabularyAndExpressions, generateDialoguesWithCallback, generateMoreItems, regenerateSection, regenerateSingleDialogue } from './services/geminiService';
 import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario, User, checkDailyQuota, incrementDailyQuota, checkIsAdmin } from './services/firebase';
 import { Loader2, AlertCircle, RefreshCw, Globe, Star, Settings, Type, Zap, Key } from 'lucide-react';
 import { UI_TEXT } from './constants';
@@ -376,6 +376,63 @@ export default function App() {
       console.error("Failed to repair section", e);
       alert(t.errorDesc);
     }
+  };
+
+  // --- NEW: Handle Retry Specific Dialogue Scene (Smart Regenerate in place) ---
+  const handleRetryDialogueScene = async (sceneIndex: number) => {
+     if (!currentContent) return;
+     
+     // Derive roles (Basic fallback if not persisted, but usually persisted)
+     const roles = { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' };
+     // Ideally roles should be stored in content, but for now we default. 
+     // Note: If you stored roles in content earlier, extract them here.
+
+     try {
+       const newScene = await regenerateSingleDialogue(
+         currentContent.scenarioName,
+         sceneIndex,
+         currentContent.vocabulary,
+         roles,
+         language,
+         customApiKey || undefined
+       );
+
+       if (newScene) {
+          const updatedDialogues = [...currentContent.dialogues];
+          updatedDialogues[sceneIndex] = newScene;
+
+          const updatedContent = {
+             ...currentContent,
+             dialogues: updatedDialogues
+          };
+          
+          // Update View
+          setCurrentContent(updatedContent);
+
+          // Update Versions
+          setCurrentVersions(prev => {
+             const updated = [...prev];
+             updated[currentVersionIndex] = updatedContent;
+             return updated;
+          });
+
+          // Update History
+          setScenarioHistory(prev => {
+             return prev.map(item => {
+               if (item.id === currentContent.scenarioName) {
+                 const newVersions = [...item.versions];
+                 newVersions[currentVersionIndex] = updatedContent;
+                 return { ...item, versions: newVersions };
+               }
+               return item;
+             });
+          });
+       }
+
+     } catch (e) {
+       console.error("Failed to regenerate scene", e);
+       alert(t.errorDesc);
+     }
   };
 
   // --- API KEY & QUOTA LOGIC ---
@@ -854,6 +911,7 @@ export default function App() {
             isGeneratingDialogues={isGeneratingDialogues}
             onLoadMoreItems={handleLoadMoreItems}
             onRetrySection={handleRetrySection}
+            onRetryScene={handleRetryDialogueScene}
           />
         )}
 

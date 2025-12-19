@@ -23,6 +23,7 @@ interface StudyViewProps {
   isGeneratingDialogues?: boolean;
   onLoadMoreItems?: (type: 'vocab' | 'expression') => Promise<void>;
   onRetrySection?: (type: 'vocab' | 'expression') => Promise<void>;
+  onRetryScene?: (sceneIndex: number) => Promise<void>;
 }
 
 type Tab = 'vocab' | 'expressions' | 'dialogue';
@@ -47,7 +48,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
   voiceEngine,
   isGeneratingDialogues,
   onLoadMoreItems,
-  onRetrySection
+  onRetrySection,
+  onRetryScene
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('vocab');
   const scrollContainerRef = useRef<HTMLDivElement>(null); 
@@ -432,6 +434,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
               notation={notation} 
               voiceEngine={voiceEngine}
               onRetry={onRegenerate}
+              onRetryScene={onRetryScene}
               isGenerating={isGeneratingDialogues}
             />
           )}

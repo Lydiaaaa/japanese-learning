@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { DialogueSection, Language, Notation, VoiceEngine } from '../types';
-import { Play, Pause, Mic, Volume2, MessageSquare, Download, Loader2, RefreshCw } from 'lucide-react';
+import { Play, Pause, Mic, Volume2, MessageSquare, Download, Loader2, RefreshCw, PenTool } from 'lucide-react';
 import { playTTS, generateDialogueAudioWithProgress } from '../services/geminiService';
 import { UI_TEXT } from '../constants';
 
@@ -11,6 +11,7 @@ interface Props {
   notation: Notation;
   voiceEngine?: VoiceEngine;
   onRetry?: () => void;
+  onRetryScene?: (index: number) => Promise<void>;
   isGenerating?: boolean;
 }
 
@@ -20,13 +21,24 @@ const getTranslation = (trans: string | { en: string; zh: string } | undefined, 
   return trans[lang] || trans.en || '';
 };
 
-export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, voiceEngine = 'system', onRetry, isGenerating }) => {
+export const DialoguePlayer: React.FC<Props> = ({ 
+    sections, 
+    language, 
+    notation, 
+    voiceEngine = 'system', 
+    onRetry, 
+    onRetryScene,
+    isGenerating 
+}) => {
   const [activeSectionIdx, setActiveSectionIdx] = useState<number>(0);
   const [playingLine, setPlayingLine] = useState<{sectionIdx: number, lineIdx: number} | null>(null);
   const [recordingLine, setRecordingLine] = useState<{sectionIdx: number, lineIdx: number} | null>(null);
   const [recordedAudio, setRecordedAudio] = useState<Record<string, string>>({}); 
   const [isDownloadingAudio, setIsDownloadingAudio] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<string>('');
+  
+  // Local loading state for retry actions
+  const [retryingSceneIdx, setRetryingSceneIdx] = useState<number | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -118,6 +130,19 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, 
     }
   };
 
+  const handleRetryClick = async () => {
+    if (onRetryScene) {
+      setRetryingSceneIdx(activeSectionIdx);
+      try {
+        await onRetryScene(activeSectionIdx);
+      } finally {
+        setRetryingSceneIdx(null);
+      }
+    } else if (onRetry) {
+      onRetry();
+    }
+  };
+
   const startRecording = async (sectionIdx: number, lineIdx: number) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -161,7 +186,11 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, 
   };
 
   const activeSection = sections[activeSectionIdx];
-  const isSectionLoading = !activeSection;
+  // Determine if this specific section is loading.
+  // It is loading if:
+  // 1. It is undefined/null (initial generation)
+  // 2. We are explicitly retrying this index locally
+  const isSectionLoading = !activeSection || retryingSceneIdx === activeSectionIdx;
 
   return (
     <div className="flex flex-col md:flex-row gap-6 h-full items-start">
@@ -192,10 +221,10 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, 
               </div>
               <div className="flex-1 min-w-0 relative z-10">
                 <div className={`text-xs font-bold uppercase mb-0.5 ${isActive ? 'text-indigo-200' : 'text-slate-400'}`}>
-                  Scene {idx + 1}
+                  {t.scene} {idx + 1}
                 </div>
                 <div className={`font-bold text-sm truncate ${isActive ? 'text-white' : 'text-slate-700'}`}>
-                  {isLoaded ? sec.title : (idx === 0 ? "Generating..." : "Waiting...")}
+                  {isLoaded ? sec.title : (idx === 0 ? "..." : "...")}
                 </div>
               </div>
             </button>
@@ -207,11 +236,16 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, 
       <div className="flex-1 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col min-h-[500px] w-full">
         {isSectionLoading ? (
            // Skeleton for Active Loading Section
-           <div className="flex flex-col items-center justify-center h-full p-8 text-center flex-1">
-              <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mb-4" />
-              <h3 className="text-lg font-bold text-slate-800">Writing Scene {activeSectionIdx + 1}...</h3>
-              <p className="text-slate-400 mt-2 max-w-sm">
-                 Using AI to compose a realistic dialogue for this specific part of the scenario.
+           <div className="flex flex-col items-center justify-center h-full p-8 text-center flex-1 animate-in fade-in zoom-in-95 duration-500">
+              <div className="relative mb-6">
+                 <div className="absolute inset-0 bg-indigo-200 rounded-full blur-xl opacity-40 animate-pulse"></div>
+                 <div className="relative bg-white p-4 rounded-full shadow-sm border border-indigo-100">
+                    <PenTool className="w-8 h-8 text-indigo-500 animate-bounce" style={{ animationDuration: '3s' }} />
+                 </div>
+              </div>
+              <h3 className="text-lg font-bold text-slate-800">{t.writingScene}</h3>
+              <p className="text-slate-400 mt-2 max-w-sm text-sm">
+                 {t.writingDesc}
               </p>
            </div>
         ) : (
@@ -219,7 +253,7 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, 
            <>
             <div className="p-4 md:p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/50 rounded-t-2xl">
               <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                <span className="bg-indigo-100 text-indigo-600 text-xs px-2 py-1 rounded-md">SCENE {activeSectionIdx + 1}</span>
+                <span className="bg-indigo-100 text-indigo-600 text-xs px-2 py-1 rounded-md uppercase">{t.scene} {activeSectionIdx + 1}</span>
                 {activeSection.title}
               </h3>
               <button 
@@ -318,15 +352,20 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, 
                     );
                   })
               ) : (
-                <div className="text-center py-12 text-slate-400">
-                    <p className="mb-2 font-medium">Content temporarily unavailable</p>
-                    <p className="text-xs max-w-xs mx-auto opacity-70 mb-4">The AI response for this section was incomplete.</p>
-                    {onRetry && (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                    <div className="p-3 bg-white rounded-full mb-3 shadow-sm">
+                      <MessageSquare className="w-6 h-6 text-slate-300" />
+                    </div>
+                    <p className="mb-2 font-bold text-slate-600">{t.contentUnavailable}</p>
+                    <p className="text-xs max-w-xs mx-auto opacity-70 mb-6 text-center">{t.incompleteResponse}</p>
+                    {(onRetry || onRetryScene) && (
                         <button 
-                          onClick={onRetry} 
-                          className="px-4 py-2 bg-slate-100 hover:bg-indigo-50 text-indigo-600 rounded-lg text-sm font-medium transition-colors"
+                          onClick={handleRetryClick}
+                          disabled={retryingSceneIdx !== null}
+                          className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 shadow-sm rounded-full text-sm font-bold text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 transition-all disabled:opacity-50"
                         >
-                            Retry Generation
+                            {retryingSceneIdx !== null ? <Loader2 className="w-4 h-4 animate-spin"/> : <RefreshCw className="w-4 h-4" />}
+                            {t.retrySection}
                         </button>
                     )}
                 </div>

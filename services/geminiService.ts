@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ScenarioContent, Language, ProgressCallback, VoiceEngine, VocabularyItem, DialogueSection, DialogueLine, ExpressionItem } from "../types";
 
@@ -130,7 +129,6 @@ const findTitle = (obj: any, defaultTitle: string): string => {
 // --- NEW SPLIT GENERATION FUNCTIONS ---
 
 // STEP 1: Generate Vocabulary, Expressions AND ROLES (FAST)
-// NOW UPDATED: Performs two parallel requests to ensure reliability.
 export const generateVocabularyAndExpressions = async (
   scenario: string, 
   language: Language = 'zh', 
@@ -222,9 +220,6 @@ export const generateVocabularyAndExpressions = async (
   };
 
   try {
-    // EXECUTE IN PARALLEL
-    // This splits the load and prevents truncation of the second part (expressions)
-    // if the vocabulary list is long.
     const [vocabResponse, exprResponse] = await Promise.all([
       ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -284,8 +279,8 @@ export const generateVocabularyAndExpressions = async (
   };
 };
 
-// --- REPAIR FUNCTION: REGENERATE SPECIFIC SECTION ---
-// This is used when a section failed to generate (empty), so we fetch standard counts, not "new/more" items.
+// ... existing regenerateSection and generateMoreItems functions ...
+
 export const regenerateSection = async (
   scenario: string,
   type: 'vocab' | 'expression',
@@ -297,7 +292,6 @@ export const regenerateSection = async (
   
   const isVocab = type === 'vocab';
   const label = isVocab ? 'vocabulary words' : 'common phrases/expressions';
-  // Standard initial counts
   const count = isVocab ? 12 : 8; 
   
   const prompt = `
@@ -377,7 +371,6 @@ export const regenerateSection = async (
 };
 
 
-// --- GENERATE MORE ITEMS (APPEND) ---
 export const generateMoreItems = async (
   scenario: string,
   type: 'vocab' | 'expression',
@@ -469,7 +462,6 @@ export const generateMoreItems = async (
 
   return [];
 };
-
 
 // INTERNAL HELPER: Generate a SINGLE scene with Retry & Timeout logic
 const generateSingleScene = async (
@@ -641,6 +633,34 @@ const generateSingleScene = async (
   }
 };
 
+// --- NEW EXPORTED WRAPPER FOR SINGLE SCENE REGENERATION ---
+export const regenerateSingleDialogue = async (
+  scenario: string,
+  sceneIndex: number, // 0, 1, or 2 (0-based)
+  contextVocabulary: VocabularyItem[], 
+  roles: { user: string, partner: string },
+  language: Language = 'zh', 
+  customApiKey?: string
+): Promise<DialogueSection> => {
+    
+    // Convert 0-based index to 1-based Logic
+    const index = sceneIndex + 1;
+    const type = index === 1 ? "Intro" : (index === 2 ? "Process" : "Conclusion");
+    
+    const vocabList = contextVocabulary.slice(0, 8).map(v => v.term).join(", ");
+
+    return await generateSingleScene(
+        scenario, 
+        index, 
+        type, 
+        vocabList, 
+        roles, 
+        language, 
+        customApiKey
+    );
+};
+
+// ... existing generateDialoguesWithCallback, generateDialoguesOnly, generateScenarioContent ...
 // STEP 2: Generate Dialogues (OPTIMIZED: INCREMENTAL STREAMING)
 export const generateDialoguesWithCallback = async (
   scenario: string, 
@@ -704,6 +724,7 @@ export const generateScenarioContent = async (scenario: string, language: Langua
    };
 };
 
+// ... existing audio functions ...
 // Retrieve AudioBuffer for text (from Cache or Network)
 export const getAudioBuffer = async (text: string, voiceName: string, customApiKey?: string): Promise<AudioBuffer> => {
   const ai = getAiInstance(customApiKey);
@@ -715,7 +736,7 @@ export const getAudioBuffer = async (text: string, voiceName: string, customApiK
   }
 
   // Fetch from API
-  const stream = await ai.models.generateContentStream({
+  const responseStream = await ai.models.generateContentStream({
     model: "gemini-2.5-flash-preview-tts",
     contents: [{ parts: [{ text }] }],
     config: {
@@ -731,7 +752,7 @@ export const getAudioBuffer = async (text: string, voiceName: string, customApiK
   const collectedChunks: Float32Array[] = [];
   let totalLength = 0;
 
-  for await (const chunk of stream) {
+  for await (const chunk of responseStream) {
     const base64Audio = chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (base64Audio) {
       const float32Data = processAudioChunk(base64Audio);
@@ -871,7 +892,7 @@ export const playTTS = async (
   }
 
   try {
-    const stream = await ai.models.generateContentStream({
+    const responseStream = await ai.models.generateContentStream({
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text }] }],
       config: {
@@ -888,7 +909,7 @@ export const playTTS = async (
     const collectedChunks: Float32Array[] = [];
     let totalLength = 0;
 
-    for await (const chunk of stream) {
+    for await (const chunk of responseStream) {
       const base64Audio = chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       
       if (base64Audio) {
