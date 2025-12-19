@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { ScenarioContent, Language, ProgressCallback, VoiceEngine, VocabularyItem, DialogueSection } from "../types";
+import { ScenarioContent, Language, ProgressCallback, VoiceEngine, VocabularyItem, DialogueSection, DialogueLine } from "../types";
 
 // Helper to safely get the API Key in both Vite (production) and AI Studio (preview) environments
 const getSystemApiKey = () => {
@@ -66,6 +66,67 @@ const getAiInstance = (customKey?: string) => {
   return new GoogleGenAI({ apiKey: key });
 };
 
+// ---------------------------------------------------------------------------
+// ROBUST PARSING HELPERS
+// ---------------------------------------------------------------------------
+
+// 1. Clean Markdown from JSON string
+const cleanJsonText = (text: string): string => {
+  let cleaned = text.trim();
+  // Remove markdown code blocks if present
+  if (cleaned.includes('```')) {
+     const match = cleaned.match(/```(?:json)?([\s\S]*?)```/);
+     if (match && match[1]) {
+       cleaned = match[1].trim();
+     }
+  }
+  return cleaned;
+};
+
+// 2. Recursively find an array that looks like dialogue lines
+const findDialogueLines = (obj: any): any[] | null => {
+  if (!obj || typeof obj !== 'object') return null;
+
+  // If the object itself is an array, check if it looks like lines
+  if (Array.isArray(obj)) {
+    if (obj.length > 0 && (obj[0].speaker || obj[0].japanese || obj[0].text)) {
+      return obj;
+    }
+    return null; 
+  }
+
+  // Check common keys first
+  if (Array.isArray(obj.lines)) return obj.lines;
+  if (Array.isArray(obj.dialogue)) return obj.dialogue;
+  if (Array.isArray(obj.script)) return obj.script;
+  if (Array.isArray(obj.conversation)) return obj.conversation;
+
+  // Deep search
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const result = findDialogueLines(obj[key]);
+      if (result) return result;
+    }
+  }
+
+  return null;
+};
+
+// 3. Find title recursively
+const findTitle = (obj: any, defaultTitle: string): string => {
+  if (!obj || typeof obj !== 'object') return defaultTitle;
+  if (typeof obj.title === 'string') return obj.title;
+  if (typeof obj.sceneName === 'string') return obj.sceneName;
+  
+  // Shallow check next level
+  for (const key in obj) {
+    if (obj[key] && typeof obj[key] === 'object' && typeof obj[key].title === 'string') {
+      return obj[key].title;
+    }
+  }
+  return defaultTitle;
+};
+
 // --- NEW SPLIT GENERATION FUNCTIONS ---
 
 // STEP 1: Generate Vocabulary and Expressions (FAST)
@@ -82,66 +143,78 @@ export const generateVocabularyAndExpressions = async (scenario: string, languag
     Output strictly in JSON.
   `;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          vocabulary: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                term: { type: Type.STRING },
-                kana: { type: Type.STRING },
-                romaji: { type: Type.STRING },
-                meaning: { 
-                  type: Type.OBJECT, 
-                  properties: {
-                    en: { type: Type.STRING },
-                    zh: { type: Type.STRING }
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            vocabulary: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  term: { type: Type.STRING },
+                  kana: { type: Type.STRING },
+                  romaji: { type: Type.STRING },
+                  meaning: { 
+                    type: Type.OBJECT, 
+                    properties: {
+                      en: { type: Type.STRING },
+                      zh: { type: Type.STRING }
+                    },
+                    required: ["en", "zh"]
                   },
-                  required: ["en", "zh"]
-                },
-                type: { type: Type.STRING }
+                  type: { type: Type.STRING }
+                }
               }
-            }
-          },
-          expressions: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                phrase: { type: Type.STRING },
-                kana: { type: Type.STRING },
-                romaji: { type: Type.STRING },
-                meaning: { 
-                  type: Type.OBJECT, 
-                  properties: {
-                    en: { type: Type.STRING },
-                    zh: { type: Type.STRING }
+            },
+            expressions: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  phrase: { type: Type.STRING },
+                  kana: { type: Type.STRING },
+                  romaji: { type: Type.STRING },
+                  meaning: { 
+                    type: Type.OBJECT, 
+                    properties: {
+                      en: { type: Type.STRING },
+                      zh: { type: Type.STRING }
+                    },
+                    required: ["en", "zh"]
                   },
-                  required: ["en", "zh"]
-                },
-                nuance: { type: Type.STRING }
+                  nuance: { type: Type.STRING }
+                }
               }
             }
           }
         }
       }
-    }
-  });
+    });
 
-  if (response.text) {
-    const result = JSON.parse(response.text) as Partial<ScenarioContent>;
-    result.scenarioName = scenario;
-    result.dialogues = []; // Initialize empty
-    return result;
+    if (response.text) {
+      const cleanText = cleanJsonText(response.text);
+      const result = JSON.parse(cleanText) as Partial<ScenarioContent>;
+      result.scenarioName = scenario;
+      result.dialogues = []; // Initialize empty
+      return result;
+    }
+  } catch (e) {
+    console.error("Vocab generation error", e);
   }
-  throw new Error("Failed to generate vocabulary");
+  
+  // Fallback if vocab generation fails completely
+  return {
+    scenarioName: scenario,
+    vocabulary: [],
+    expressions: [],
+    dialogues: []
+  };
 };
 
 // INTERNAL HELPER: Generate a SINGLE scene with Retry & Timeout logic
@@ -164,70 +237,47 @@ const generateSingleScene = async (
 
   const titleLanguage = language === 'zh' ? "Simplified Chinese (简体中文)" : "English";
 
-  // More explicit prompt with JSON example to improve model compliance
+  // Reduced line count to 4-6 to prevent timeouts and improve stability
   const prompt = `
     Write Scene ${sceneIndex}/3 for: "${scenario}".
     Type: ${sceneType}.
     Goal: ${specificInstructions}.
     Context: ${contextVocab}.
     
-    Output strictly valid JSON.
-    Structure Example:
+    Output strictly valid JSON (No Markdown).
+    
+    Structure:
     {
       "title": "Title in ${titleLanguage}",
       "lines": [
         {
           "speaker": "A",
           "roleName": "Student",
-          "japanese": "こんにちは",
-          "kana": "こんにちは",
-          "romaji": "Konnichiwa",
-          "translation": { "en": "Hello", "zh": "你好" }
+          "japanese": "...",
+          "kana": "...",
+          "romaji": "...",
+          "translation": { "en": "...", "zh": "..." }
         }
       ]
     }
 
     Requirements:
     1. Title MUST be in ${titleLanguage}.
-    2. 6-8 dialogue turns.
+    2. 4-6 dialogue turns (Keep it concise).
   `;
 
   try {
-    // Increased timeout to 55 seconds to allow for creative writing latency
-    const TIMEOUT_MS = 55000; 
+    // Timeout 50s
+    const TIMEOUT_MS = 50000; 
 
     const fetchPromise = ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING, description: `The title of the scene in ${titleLanguage}` },
-            lines: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  speaker: { type: Type.STRING, enum: ["A", "B"] },
-                  roleName: { type: Type.STRING },
-                  japanese: { type: Type.STRING },
-                  kana: { type: Type.STRING },
-                  romaji: { type: Type.STRING },
-                  translation: { 
-                    type: Type.OBJECT, 
-                    properties: {
-                      en: { type: Type.STRING },
-                      zh: { type: Type.STRING }
-                    },
-                    required: ["en", "zh"]
-                  }
-                }
-              }
-            }
-          }
-        }
+        // We do NOT set responseSchema here to allow the model more flexibility 
+        // in structure, which we then handle with robust parsing.
+        // Setting schema sometimes causes strict validation errors on the API side.
       }
     });
 
@@ -238,33 +288,27 @@ const generateSingleScene = async (
     const response = await Promise.race([fetchPromise, timeoutPromise]);
 
     if (response.text) {
+      const cleanText = cleanJsonText(response.text);
       let parsed: any;
+      
       try {
-        parsed = JSON.parse(response.text);
+        parsed = JSON.parse(cleanText);
       } catch (e) {
-        throw new Error("Invalid JSON");
+        console.warn(`JSON Parse failed for Scene ${sceneIndex}:`, cleanText.substring(0, 100));
+        throw new Error("Invalid JSON structure");
       }
       
-      // Robust Parsing Logic: Find the lines array wherever it might be
-      let lines = parsed.lines;
-      let title = parsed.title || `Scene ${sceneIndex}`;
+      // Robust Parsing: recursively search for lines
+      const lines = findDialogueLines(parsed);
+      const title = findTitle(parsed, `Scene ${sceneIndex}`);
 
-      if (!lines || !Array.isArray(lines)) {
-        // Fallback: Check common alternatives key names
-        if (Array.isArray(parsed.dialogue)) lines = parsed.dialogue;
-        else if (Array.isArray(parsed.script)) lines = parsed.script;
-        else if (Array.isArray(parsed.conversation)) lines = parsed.conversation;
-        // Fallback: Check if the root object itself is the array
-        else if (Array.isArray(parsed)) lines = parsed;
-      }
-
-      if (!lines || !Array.isArray(lines)) {
-         console.warn("Missing lines in response:", parsed);
-         throw new Error("Invalid response format: 'lines' array is missing");
+      if (!lines) {
+         console.warn("Parsed object missing lines array:", parsed);
+         throw new Error("Response format missing dialogue lines");
       }
       
       // Sanitize lines to match interface
-      const sanitizedLines = lines.map((l: any) => ({
+      const sanitizedLines: DialogueLine[] = lines.map((l: any) => ({
           speaker: l.speaker || 'A',
           roleName: l.roleName || (l.speaker === 'A' ? 'User' : 'Partner'),
           japanese: l.japanese || l.text || '...',
@@ -278,7 +322,7 @@ const generateSingleScene = async (
           lines: sanitizedLines
       };
     }
-    throw new Error("Empty response");
+    throw new Error("Empty response body");
 
   } catch (error) {
     console.warn(`Scene ${sceneIndex} attempt ${attempt} failed:`, error);
@@ -287,19 +331,19 @@ const generateSingleScene = async (
       return generateSingleScene(scenario, sceneIndex, sceneType, contextVocab, language, customApiKey, attempt + 1);
     }
     
-    // FALLBACK OBJECT: Return a valid object so the UI doesn't crash or show "Unavailable"
-    // This allows the user to at least see an error message in the dialogue bubble.
+    // FALLBACK OBJECT (Prevents UI Crash)
+    // If all attempts fail, return a placeholder scene so the app doesn't break.
     return {
-      title: `Scene ${sceneIndex} (Error)`,
+      title: `Scene ${sceneIndex} (Unavailable)`,
       lines: [{
-        speaker: "A",
+        speaker: "B",
         roleName: "System",
-        japanese: "すみません、生成に失敗しました。",
-        kana: "すみません、せいせいにしっぱいしました。",
-        romaji: "Sumimasen, seisei ni shippai shimashita.",
+        japanese: "申し訳ありません。生成に時間がかかりすぎました。",
+        kana: "もうしわけありません。せいせいにじかんがかかりすぎました。",
+        romaji: "Moushiwake arimasen. Seisei ni jikan ga kakarisugimashita.",
         translation: { 
-            en: "Sorry, generation failed. Please try regenerating.", 
-            zh: "抱歉，生成失败。请尝试重新生成。" 
+            en: "Sorry, generation timed out. Please try again.", 
+            zh: "抱歉，生成超时。请尝试重新生成。" 
         }
       }]
     };
@@ -318,7 +362,7 @@ export const generateDialoguesWithCallback = async (
   const vocabList = contextVocabulary.slice(0, 8).map(v => v.term).join(", ");
 
   // Fire requests. We do NOT await Promise.all here because we want to trigger callbacks individually.
-  // However, we track them to ensure the function keeps running.
+  // We use .then() to handle successful completion of each promise independently.
   
   const p1 = generateSingleScene(scenario, 1, "Intro", vocabList, language, customApiKey)
     .then(scene => onSceneComplete(0, scene));
@@ -329,6 +373,7 @@ export const generateDialoguesWithCallback = async (
   const p3 = generateSingleScene(scenario, 3, "Conclusion", vocabList, language, customApiKey)
     .then(scene => onSceneComplete(2, scene));
 
+  // We await all to know when the whole process is effectively "done" for the caller
   await Promise.all([p1, p2, p3]);
 };
 
