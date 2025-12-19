@@ -7,7 +7,7 @@ import { ScenariosListView } from './components/ScenariosListView';
 import { UserMenu } from './components/UserMenu';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine, DialogueSection } from './types';
-import { generateVocabularyAndExpressions, generateDialoguesWithCallback, generateMoreItems, regenerateSection, regenerateSingleDialogue } from './services/geminiService';
+import { generateVocabularyAndExpressions, generateDialoguesWithCallback, generateMoreItems, regenerateSection, regenerateSingleDialogue, generateCustomScene } from './services/geminiService';
 import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario, User, checkDailyQuota, incrementDailyQuota, checkIsAdmin } from './services/firebase';
 import { Loader2, AlertCircle, RefreshCw, Globe, Star, Settings, Type, Zap, Key } from 'lucide-react';
 import { UI_TEXT } from './constants';
@@ -27,6 +27,7 @@ export default function App() {
   const [viewState, setViewState] = useState<ViewState>(ViewState.HOME);
   const [currentScenarioId, setCurrentScenarioId] = useState<string>('');
   const [currentContent, setCurrentContent] = useState<ScenarioContent | null>(null);
+  // We keep currentVersions for internal logic compatibility with the single-version model
   const [currentVersions, setCurrentVersions] = useState<ScenarioContent[]>([]);
   const [currentVersionIndex, setCurrentVersionIndex] = useState<number>(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -118,7 +119,8 @@ export default function App() {
             const existingIndex = prev.findIndex(item => item.id === content.scenarioName);
             if (existingIndex >= 0) {
               const updated = [...prev];
-              const versions = [contentWithTime, ...updated[existingIndex].versions].slice(0, 5);
+              // Overwrite with shared content as the latest version
+              const versions = [contentWithTime, ...updated[existingIndex].versions].slice(0, 1);
               updated[existingIndex] = {
                 ...updated[existingIndex],
                 versions,
@@ -219,7 +221,10 @@ export default function App() {
       const existingIndex = prev.findIndex(item => item.id === id);
       if (existingIndex >= 0) {
         const updated = [...prev];
-        const versions = [contentWithTime, ...updated[existingIndex].versions].slice(0, 5);
+        // SINGLE VERSION STRATEGY: We now overwrite the versions array with just the latest one
+        // to conform to the new design, but we keep the structure for safety.
+        // Actually, let's just keep the single source of truth at index 0.
+        const versions = [contentWithTime]; 
         updated[existingIndex] = {
           ...updated[existingIndex],
           versions,
@@ -247,24 +252,12 @@ export default function App() {
 
   const handleDeleteVersion = () => {
     if (!confirm(t.confirmDeleteVersion)) return;
-    const updatedVersions = currentVersions.filter((_, idx) => idx !== currentVersionIndex);
-    if (updatedVersions.length === 0) {
-      setScenarioHistory(prev => prev.filter(item => item.id !== currentScenarioId));
-      setViewState(ViewState.HOME);
-      setCurrentContent(null);
-      setCurrentVersions([]);
-      setCurrentScenarioId('');
-    } else {
-      setScenarioHistory(prev => prev.map(item => {
-        if (item.id === currentScenarioId) {
-          return { ...item, versions: updatedVersions };
-        }
-        return item;
-      }));
-      setCurrentVersions(updatedVersions);
-      setCurrentVersionIndex(0);
-      setCurrentContent(updatedVersions[0]);
-    }
+    // With single version model, deleting the version means deleting the whole scenario history
+    setScenarioHistory(prev => prev.filter(item => item.id !== currentScenarioId));
+    setViewState(ViewState.HOME);
+    setCurrentContent(null);
+    setCurrentVersions([]);
+    setCurrentScenarioId('');
   };
 
   // --- NEW: Handle Load More Items (Incremental Append) ---
@@ -303,18 +296,13 @@ export default function App() {
         setCurrentContent(updatedContent);
 
         // Update history / versions
-        setCurrentVersions(prev => {
-          const updated = [...prev];
-          updated[currentVersionIndex] = updatedContent;
-          return updated;
-        });
+        // Since we are moving to single-version, we update the master record
+        setCurrentVersions([updatedContent]);
 
         setScenarioHistory(prev => {
            return prev.map(item => {
               if (item.id === currentContent.scenarioName) {
-                 const newVersions = [...item.versions];
-                 newVersions[currentVersionIndex] = updatedContent;
-                 return { ...item, versions: newVersions };
+                 return { ...item, versions: [updatedContent] };
               }
               return item;
            });
@@ -354,19 +342,13 @@ export default function App() {
         setCurrentContent(updatedContent);
 
         // Update current version in the versions list
-        setCurrentVersions(prev => {
-          const updated = [...prev];
-          updated[currentVersionIndex] = updatedContent;
-          return updated;
-        });
+        setCurrentVersions([updatedContent]);
 
         // Update persistent history
         setScenarioHistory(prev => {
            return prev.map(item => {
               if (item.id === currentContent.scenarioName) {
-                 const newVersions = [...item.versions];
-                 newVersions[currentVersionIndex] = updatedContent;
-                 return { ...item, versions: newVersions };
+                 return { ...item, versions: [updatedContent] };
               }
               return item;
            });
@@ -383,9 +365,7 @@ export default function App() {
      if (!currentContent) return;
      
      // Derive roles (Basic fallback if not persisted, but usually persisted)
-     const roles = { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' };
-     // Ideally roles should be stored in content, but for now we default. 
-     // Note: If you stored roles in content earlier, extract them here.
+     const roles = currentContent.roles || { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' };
 
      try {
        const newScene = await regenerateSingleDialogue(
@@ -410,19 +390,13 @@ export default function App() {
           setCurrentContent(updatedContent);
 
           // Update Versions
-          setCurrentVersions(prev => {
-             const updated = [...prev];
-             updated[currentVersionIndex] = updatedContent;
-             return updated;
-          });
+          setCurrentVersions([updatedContent]);
 
           // Update History
           setScenarioHistory(prev => {
              return prev.map(item => {
                if (item.id === currentContent.scenarioName) {
-                 const newVersions = [...item.versions];
-                 newVersions[currentVersionIndex] = updatedContent;
-                 return { ...item, versions: newVersions };
+                 return { ...item, versions: [updatedContent] };
                }
                return item;
              });
@@ -433,6 +407,50 @@ export default function App() {
        console.error("Failed to regenerate scene", e);
        alert(t.errorDesc);
      }
+  };
+
+  // --- NEW: Handle ADD CUSTOM DIALOGUE SCENE ---
+  const handleAddDialogueScene = async (prompt: string) => {
+    if (!currentContent) return;
+
+    // Derive roles
+    const roles = currentContent.roles || { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' };
+
+    try {
+        const newScene = await generateCustomScene(
+            currentContent.scenarioName,
+            prompt,
+            currentContent.vocabulary,
+            roles,
+            language,
+            customApiKey || undefined
+        );
+
+        if (newScene) {
+            const updatedDialogues = [...currentContent.dialogues, newScene];
+            const updatedContent = {
+                ...currentContent,
+                dialogues: updatedDialogues
+            };
+
+            // Update View
+            setCurrentContent(updatedContent);
+            setCurrentVersions([updatedContent]);
+
+             // Update History
+            setScenarioHistory(prev => {
+                return prev.map(item => {
+                    if (item.id === currentContent.scenarioName) {
+                        return { ...item, versions: [updatedContent] };
+                    }
+                    return item;
+                });
+            });
+        }
+    } catch (e) {
+        console.error("Failed to add custom scene", e);
+        alert(t.errorDesc);
+    }
   };
 
   // --- API KEY & QUOTA LOGIC ---
@@ -529,18 +547,14 @@ export default function App() {
          vocabulary: partialData.vocabulary || [],
          expressions: partialData.expressions || [],
          dialogues: initialPlaceholders, 
+         roles: roles,
          timestamp: Date.now()
       };
 
       // Save Initial Version
       const savedVersion = saveScenarioToHistory(scenarioName, initialContent);
       
-      setCurrentVersions(prev => {
-         if (scenarioName === currentScenarioId) {
-             return [savedVersion, ...prev];
-         }
-         return [savedVersion];
-      });
+      setCurrentVersions([savedVersion]);
       setCurrentVersionIndex(0);
       setCurrentContent(savedVersion);
       
@@ -582,20 +596,15 @@ export default function App() {
                 setScenarioHistory(prev => {
                     return prev.map(item => {
                         if (item.id === scenarioName) {
-                            const newVersions = [...item.versions];
-                            newVersions[0] = updatedContent;
-                            return { ...item, versions: newVersions };
+                            // Update the single version
+                            return { ...item, versions: [updatedContent] };
                         }
                         return item;
                     });
                 });
                 
                 // Update versions list state
-                setCurrentVersions(prev => {
-                    const updated = [...prev];
-                    updated[0] = updatedContent;
-                    return updated;
-                });
+                setCurrentVersions([updatedContent]);
             },
             language, 
             overrideKey || customApiKey || undefined
@@ -628,7 +637,9 @@ export default function App() {
     // If exists and has content, open it (no quota used)
     if (existingHistory && existingHistory.versions.length > 0) {
       const latestVersion = existingHistory.versions[0];
-      setCurrentVersions(existingHistory.versions);
+      // For legacy support, if there are multiple versions, we only take the first one (latest)
+      // effectively migrating the UI to single-version mode.
+      setCurrentVersions([latestVersion]); 
       setCurrentVersionIndex(0);
       setCurrentContent(latestVersion);
       
@@ -651,6 +662,7 @@ export default function App() {
   };
 
   const handleVersionSelect = (index: number) => {
+    // Legacy support or fallback if needed, but UI for this is removed
     if (index >= 0 && index < currentVersions.length) {
       setCurrentVersionIndex(index);
       setCurrentContent(currentVersions[index]);
@@ -659,9 +671,10 @@ export default function App() {
 
   const openHistoryItem = (item: ScenarioHistoryItem) => {
     setCurrentScenarioId(item.id);
-    setCurrentVersions(item.versions);
+    const latestVersion = item.versions[0];
+    setCurrentVersions([latestVersion]);
     setCurrentVersionIndex(0);
-    setCurrentContent(item.versions[0]);
+    setCurrentContent(latestVersion);
     
     setScenarioHistory(prev => prev.map(h => 
       h.id === item.id ? { ...h, lastAccessed: Date.now() } : h
@@ -912,6 +925,7 @@ export default function App() {
             onLoadMoreItems={handleLoadMoreItems}
             onRetrySection={handleRetrySection}
             onRetryScene={handleRetryDialogueScene}
+            onAddScene={handleAddDialogueScene}
           />
         )}
 

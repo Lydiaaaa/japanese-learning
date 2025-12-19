@@ -1,3 +1,4 @@
+
 export type Language = 'zh' | 'en';
 export type Notation = 'kana' | 'romaji';
 export type VoiceEngine = 'system' | 'ai';
@@ -39,6 +40,8 @@ export interface ScenarioContent {
   vocabulary: VocabularyItem[];
   expressions: ExpressionItem[];
   dialogues: DialogueSection[];
+  // New: Store roles persistantly to ensure custom scenes use the same characters
+  roles?: { user: string; partner: string };
   timestamp?: number; 
 }
 
@@ -65,7 +68,9 @@ export interface SavedItem {
 export interface ScenarioHistoryItem {
   id: string; 
   name: string;
-  versions: ScenarioContent[];
+  // We keep 'versions' for backward compatibility with existing localstorage data,
+  // but the app will now logically treat versions[0] as the single source of truth.
+  versions: ScenarioContent[]; 
   lastAccessed: number;
 }
 

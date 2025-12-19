@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ScenarioContent, Language, ProgressCallback, VoiceEngine, VocabularyItem, DialogueSection, DialogueLine, ExpressionItem } from "../types";
 
@@ -467,28 +468,34 @@ export const generateMoreItems = async (
 const generateSingleScene = async (
   scenario: string,
   sceneIndex: number, // 1, 2, or 3
-  sceneType: string, // "Intro", "Process", "Conclusion"
+  sceneType: string, // "Intro", "Process", "Conclusion" OR "Custom"
   contextVocab: string,
   roles: { user: string, partner: string },
   language: Language,
   customApiKey?: string,
-  attempt: number = 1
+  attempt: number = 1,
+  customPrompt?: string // For custom scenes
 ): Promise<DialogueSection> => {
   const ai = getAiInstance(customApiKey);
 
-  const specificInstructions = {
-    1: "Scene 1: Opening. Establish the goal.",
-    2: "Scene 2: Interaction. Details/complication.",
-    3: "Scene 3: Closing. Completion/Farewell. NO trailing questions."
-  }[sceneIndex] || "";
+  let goalInstruction = "";
+  if (sceneType === "Custom" && customPrompt) {
+      goalInstruction = `Custom Scene Goal: ${customPrompt}. Write a conversation focusing on this specific topic within the larger scenario.`;
+  } else {
+      goalInstruction = {
+        1: "Scene 1: Opening. Establish the goal.",
+        2: "Scene 2: Interaction. Details/complication.",
+        3: "Scene 3: Closing. Completion/Farewell. NO trailing questions."
+      }[sceneIndex] || "";
+  }
 
   const titleLanguage = language === 'zh' ? "Simplified Chinese (简体中文)" : "English";
 
   // Strict instructions for consistency
   const prompt = `
-    Write Scene ${sceneIndex}/3 for: "${scenario}".
+    Write a Dialogue Scene for: "${scenario}".
     Type: ${sceneType}.
-    Goal: ${specificInstructions}.
+    Goal: ${goalInstruction}.
     Context: ${contextVocab}.
     
     DEFINED ROLES (STRICTLY ENFORCE):
@@ -557,7 +564,7 @@ const generateSingleScene = async (
       
       // Robust Parsing: recursively search for lines
       const lines = findDialogueLines(parsed);
-      let title = findTitle(parsed, `Scene ${sceneIndex}`);
+      let title = findTitle(parsed, sceneType === "Custom" ? "Custom Scene" : `Scene ${sceneIndex}`);
 
       if (!lines) {
          console.warn("Parsed object missing lines array:", parsed);
@@ -612,12 +619,12 @@ const generateSingleScene = async (
     console.warn(`Scene ${sceneIndex} attempt ${attempt} failed:`, error);
     if (attempt < 2) {
       // Retry once
-      return generateSingleScene(scenario, sceneIndex, sceneType, contextVocab, roles, language, customApiKey, attempt + 1);
+      return generateSingleScene(scenario, sceneIndex, sceneType, contextVocab, roles, language, customApiKey, attempt + 1, customPrompt);
     }
     
     // FALLBACK OBJECT
     return {
-      title: `Scene ${sceneIndex} (Unavailable)`,
+      title: sceneType === "Custom" ? "Custom Scene (Unavailable)" : `Scene ${sceneIndex} (Unavailable)`,
       lines: [{
         speaker: "B",
         roleName: roles.partner || "System",
@@ -645,7 +652,10 @@ export const regenerateSingleDialogue = async (
     
     // Convert 0-based index to 1-based Logic
     const index = sceneIndex + 1;
-    const type = index === 1 ? "Intro" : (index === 2 ? "Process" : "Conclusion");
+    // Note: If sceneIndex >= 3, it's likely a custom scene, but for regeneration we treat it as Process/Custom
+    // Actually, for custom scenes, we might lose the original prompt context in this simplified regenerate function.
+    // For now, if index > 3, we treat it as "Process" type for regeneration which is a safe generic fallback.
+    const type = index === 1 ? "Intro" : (index === 2 ? "Process" : (index === 3 ? "Conclusion" : "Custom"));
     
     const vocabList = contextVocabulary.slice(0, 8).map(v => v.term).join(", ");
 
@@ -660,7 +670,34 @@ export const regenerateSingleDialogue = async (
     );
 };
 
-// ... existing generateDialoguesWithCallback, generateDialoguesOnly, generateScenarioContent ...
+// --- NEW EXPORTED WRAPPER FOR CUSTOM SCENE GENERATION ---
+export const generateCustomScene = async (
+  scenario: string,
+  userPrompt: string,
+  contextVocabulary: VocabularyItem[], 
+  roles: { user: string, partner: string },
+  language: Language = 'zh', 
+  customApiKey?: string
+): Promise<DialogueSection> => {
+    
+    const vocabList = contextVocabulary.slice(0, 8).map(v => v.term).join(", ");
+
+    // sceneIndex 99 to indicate custom
+    return await generateSingleScene(
+        scenario, 
+        99, 
+        "Custom", 
+        vocabList, 
+        roles, 
+        language, 
+        customApiKey,
+        1,
+        userPrompt
+    );
+};
+
+
+// ... existing generateDialoguesWithCallback ...
 // STEP 2: Generate Dialogues (OPTIMIZED: INCREMENTAL STREAMING)
 export const generateDialoguesWithCallback = async (
   scenario: string, 
@@ -720,6 +757,7 @@ export const generateScenarioContent = async (scenario: string, language: Langua
      vocabulary: part1.vocabulary || [],
      expressions: part1.expressions || [],
      dialogues: part2,
+     roles: roles,
      timestamp: Date.now()
    };
 };

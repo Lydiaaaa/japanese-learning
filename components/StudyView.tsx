@@ -24,6 +24,7 @@ interface StudyViewProps {
   onLoadMoreItems?: (type: 'vocab' | 'expression') => Promise<void>;
   onRetrySection?: (type: 'vocab' | 'expression') => Promise<void>;
   onRetryScene?: (sceneIndex: number) => Promise<void>;
+  onAddScene?: (prompt: string) => Promise<void>;
 }
 
 type Tab = 'vocab' | 'expressions' | 'dialogue';
@@ -49,7 +50,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
   isGeneratingDialogues,
   onLoadMoreItems,
   onRetrySection,
-  onRetryScene
+  onRetryScene,
+  onAddScene
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('vocab');
   const scrollContainerRef = useRef<HTMLDivElement>(null); 
@@ -58,6 +60,9 @@ export const StudyView: React.FC<StudyViewProps> = ({
   const [vocabLoadCount, setVocabLoadCount] = useState(0);
   const [expressionLoadCount, setExpressionLoadCount] = useState(0);
   
+  // MAX LOAD TIMES INCREASED TO 4
+  const MAX_LOAD_MORE = 4;
+
   // Reset counts when version changes
   useEffect(() => {
     setVocabLoadCount(0);
@@ -87,16 +92,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  const formatTime = (timestamp?: number) => {
-    if (!timestamp) return '';
-    return new Date(timestamp).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
 
   const handleLoadMore = async (type: 'vocab' | 'expression') => {
       if (!onLoadMoreItems) return;
@@ -286,35 +281,12 @@ export const StudyView: React.FC<StudyViewProps> = ({
             </div>
             
             <div className="flex items-center gap-2 ml-12 md:ml-0 flex-wrap">
-               {versions.length > 1 && (
-                 <div className="relative group">
-                   <select 
-                     value={currentVersionIndex}
-                     onChange={(e) => onSelectVersion(Number(e.target.value))}
-                     className="appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg pl-9 pr-8 py-2 focus:ring-indigo-500 focus:border-indigo-500 block cursor-pointer hover:bg-slate-100 transition-colors font-medium"
-                   >
-                     {versions.map((v, idx) => (
-                       <option key={idx} value={idx}>
-                         {idx === 0 ? t.latest : `V${versions.length - idx}`} - {formatTime(v.timestamp)}
-                       </option>
-                     ))}
-                   </select>
-                   <Clock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
-                 </div>
-               )}
-
-               <button
-                 onClick={onRegenerate}
-                 className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors"
-               >
-                 <RotateCw className="w-4 h-4" />
-                 <span className="hidden sm:inline">{t.regenerate}</span>
-               </button>
-
+               {/* VERSION SELECTOR REMOVED */}
+               
                <button
                  onClick={onDeleteVersion}
                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                 title={t.deleteVersion}
+                 title="Delete Scenario"
                >
                  <Trash2 className="w-4 h-4" />
                </button>
@@ -408,7 +380,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
               voiceEngine={voiceEngine}
               onRetry={() => handleRetrySpecific('vocab')}
               onLoadMore={() => handleLoadMore('vocab')}
-              canLoadMore={vocabLoadCount < 2}
+              canLoadMore={vocabLoadCount < MAX_LOAD_MORE}
             />
           )}
           
@@ -423,7 +395,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
               voiceEngine={voiceEngine}
               onRetry={() => handleRetrySpecific('expression')}
               onLoadMore={() => handleLoadMore('expression')}
-              canLoadMore={expressionLoadCount < 2}
+              canLoadMore={expressionLoadCount < MAX_LOAD_MORE}
             />
           )}
 
@@ -435,6 +407,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
               voiceEngine={voiceEngine}
               onRetry={onRegenerate}
               onRetryScene={onRetryScene}
+              onAddScene={onAddScene}
               isGenerating={isGeneratingDialogues}
             />
           )}
