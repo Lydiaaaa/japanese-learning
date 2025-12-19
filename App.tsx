@@ -7,7 +7,7 @@ import { ScenariosListView } from './components/ScenariosListView';
 import { UserMenu } from './components/UserMenu';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine } from './types';
-import { generateScenarioContent } from './services/geminiService';
+import { generateVocabularyAndExpressions, generateDialoguesOnly, generateScenarioContent } from './services/geminiService';
 import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario, User, checkDailyQuota, incrementDailyQuota, checkIsAdmin } from './services/firebase';
 import { Loader2, AlertCircle, RefreshCw, Globe, Star, Settings, Type, Zap, Key } from 'lucide-react';
 import { UI_TEXT } from './constants';
@@ -32,6 +32,7 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loadingScenarioName, setLoadingScenarioName] = useState<string>('');
   const [loadingStep, setLoadingStep] = useState<number>(0);
+  const [isGeneratingDialogues, setIsGeneratingDialogues] = useState<boolean>(false);
   
   // Global State with intelligent default
   const [language, setLanguage] = useState<Language>(getInitialLanguage());
@@ -310,17 +311,16 @@ export default function App() {
     }
   };
 
+  // STRATEGY: SPLIT GENERATION
+  // 1. Generate Metadata (Vocab/Expressions) -> Fast -> Show UI
+  // 2. Generate Dialogues -> Slow -> Background Process -> Update UI
   const executeScenarioGeneration = async (scenarioName: string, overrideKey?: string) => {
     setViewState(ViewState.GENERATING);
-    setLoadingStep(0); // Reset loading step
+    setLoadingStep(0); 
+    setIsGeneratingDialogues(false);
     
-    // Define a variable timeline for progress simulation
-    // Step 0: Analysis (Start)
-    // Step 1: Vocabulary (starts at 2000ms)
-    // Step 2: Expressions (starts at 5000ms) - Vocabulary took 3s
-    // Step 3: Dialogues (starts at 9000ms) - Expressions took 4s
-    // Step 4: Finalizing (starts at 16000ms) - Dialogues took 7s (Main work)
-    const timeline = [2000, 5000, 9000, 16000];
+    // Faster timeline for Step 1
+    const timeline = [1500, 3000];
     const timers: ReturnType<typeof setTimeout>[] = [];
 
     timeline.forEach((time, index) => {
@@ -331,17 +331,27 @@ export default function App() {
     });
 
     try {
-      const content = await generateScenarioContent(scenarioName, language, overrideKey || customApiKey || undefined);
+      // Step 1: Generate Vocab & Expressions (Fast)
+      const partialContent = await generateVocabularyAndExpressions(scenarioName, language, overrideKey || customApiKey || undefined);
       
       // If we used the free quota (no custom key), increment usage
       if (!overrideKey && !customApiKey) {
         incrementDailyQuota(user);
       }
 
-      const savedVersion = saveScenarioToHistory(scenarioName, content);
+      // Construct a valid ScenarioContent object with empty dialogues
+      const initialContent: ScenarioContent = {
+         scenarioName: scenarioName,
+         vocabulary: partialContent.vocabulary || [],
+         expressions: partialContent.expressions || [],
+         dialogues: [],
+         timestamp: Date.now()
+      };
+
+      // Save Initial Version
+      const savedVersion = saveScenarioToHistory(scenarioName, initialContent);
       
       setCurrentVersions(prev => {
-         // If regenerating, append to list. If new scenario, list is just one.
          if (scenarioName === currentScenarioId) {
              return [savedVersion, ...prev];
          }
@@ -349,13 +359,45 @@ export default function App() {
       });
       setCurrentVersionIndex(0);
       setCurrentContent(savedVersion);
+      
+      // ENTER STUDY VIEW IMMEDIATELY
       setViewState(ViewState.STUDY);
+      
+      // Step 2: Generate Dialogues (Background)
+      setIsGeneratingDialogues(true);
+      try {
+         const dialogues = await generateDialoguesOnly(
+            scenarioName, 
+            initialContent.vocabulary, // Context Injection
+            language, 
+            overrideKey || customApiKey || undefined
+         );
+
+         // Update the content in memory and history
+         const fullContent = { ...initialContent, dialogues };
+         const fullSavedVersion = saveScenarioToHistory(scenarioName, fullContent);
+         
+         // Update UI safely
+         setCurrentContent(fullSavedVersion);
+         setCurrentVersions(prev => {
+             const updated = [...prev];
+             // The first item is the one we just added/updated
+             updated[0] = fullSavedVersion;
+             return updated;
+         });
+      } catch (bgError) {
+         console.error("Background dialogue generation failed", bgError);
+         // We don't crash the app, user just sees empty dialogues with option to retry maybe?
+         // For now, `isGeneratingDialogues` will flip to false and they'll see empty state
+      } finally {
+         setIsGeneratingDialogues(false);
+      }
+
     } catch (err) {
       console.error(err);
       setErrorMsg(t.errorDesc);
       setViewState(ViewState.ERROR);
     } finally {
-      // Clear any pending state updates if the process finishes or fails
       timers.forEach(clearTimeout);
     }
   };
@@ -607,13 +649,13 @@ export default function App() {
               <Loader2 className="w-16 h-16 text-indigo-600 animate-spin relative z-10" />
             </div>
             
-            {/* Dynamic Loading Text */}
+            {/* Dynamic Loading Text (Simplified for Step 1) */}
             <div className="mt-8 h-16 flex flex-col items-center">
                <h2 className="text-2xl font-bold text-slate-800 animate-in fade-in duration-500 key={loadingStep}">
-                 {t.loadingSteps[Math.min(loadingStep, t.loadingSteps.length - 1)]}
+                 {t.loadingSteps[Math.min(loadingStep, 2)]} 
                </h2>
                <div className="flex gap-2 mt-4">
-                  {t.loadingSteps.map((_, idx) => (
+                  {[0, 1, 2].map((_, idx) => (
                     <div 
                       key={idx}
                       className={`h-1.5 rounded-full transition-all duration-300 ${
@@ -652,6 +694,7 @@ export default function App() {
             onDeleteVersion={handleDeleteVersion}
             notation={notation}
             voiceEngine={voiceEngine}
+            isGeneratingDialogues={isGeneratingDialogues}
           />
         )}
 

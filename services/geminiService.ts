@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { ScenarioContent, Language, ProgressCallback, VoiceEngine } from "../types";
+import { ScenarioContent, Language, ProgressCallback, VoiceEngine, VocabularyItem } from "../types";
 
 // Helper to safely get the API Key in both Vite (production) and AI Studio (preview) environments
 const getSystemApiKey = () => {
@@ -66,34 +66,20 @@ const getAiInstance = (customKey?: string) => {
   return new GoogleGenAI({ apiKey: key });
 };
 
-export const generateScenarioContent = async (scenario: string, language: Language = 'zh', customApiKey?: string): Promise<ScenarioContent> => {
+// --- NEW SPLIT GENERATION FUNCTIONS ---
+
+// STEP 1: Generate Vocabulary and Expressions (FAST)
+export const generateVocabularyAndExpressions = async (scenario: string, language: Language = 'zh', customApiKey?: string): Promise<Partial<ScenarioContent>> => {
   const ai = getAiInstance(customApiKey);
 
-  // Updated Prompt:
-  // 1. Strictly enforces 3 distinct sub-scenes via specific naming instructions.
-  // 2. Adds explicit instructions to ensure the conversation has a proper closing (no ending on questions).
   const prompt = `
-    Create a comprehensive Japanese language study guide for the specific scenario: "${scenario}".
+    Create a Japanese language study list for the scenario: "${scenario}".
     
     Requirements:
-    1. Vocabulary: 30-35 essential words specific to this scenario. Include Kana (Hiragana/Katakana) and Romaji. Provide meanings in BOTH English and Simplified Chinese.
+    1. Vocabulary: 30-35 essential words. Kana, Romaji, Meanings (English & Simplified Chinese).
+    2. Expressions: 15-20 common useful phrases. Kana, Romaji, Meanings (English & Simplified Chinese).
     
-    2. Expressions: 15-20 common useful phrases/sentence patterns. Include full reading in Kana and Romaji. Provide meanings in BOTH English and Simplified Chinese.
-    
-    3. Dialogues: Create a realistic conversation flow STRICTLY divided into 3 distinct chronological sub-scenes (Items in the 'dialogues' array).
-       
-       - Sub-scene 1: Introduction / Request (Start of interaction).
-       - Sub-scene 2: The Process / Details / Complications (The longest part, verifying details, filling forms, checking IDs).
-       - Sub-scene 3: Conclusion / Farewell (End of interaction).
-       
-       CRITICAL RULES FOR DIALOGUES:
-       - Each sub-scene MUST contain at least 6-8 lines of back-and-forth dialogue (A->B->A->B...).
-       - The conversation MUST NOT end abruptly. The final sub-scene MUST include a proper conclusion (e.g., "Thank you," "Here is your card," "Goodbye"). Do NOT end the final scene with a question.
-       - Use appropriate Keigo (Honorifics) for service staff.
-       - Include full reading in Kana and Romaji for every line.
-       - Provide translations in BOTH English and Simplified Chinese.
-    
-    Ensure natural Japanese suitable for daily life.
+    Output strictly in JSON.
   `;
 
   const response = await ai.models.generateContent({
@@ -104,24 +90,23 @@ export const generateScenarioContent = async (scenario: string, language: Langua
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          scenarioName: { type: Type.STRING },
           vocabulary: {
             type: Type.ARRAY,
             items: {
               type: Type.OBJECT,
               properties: {
-                term: { type: Type.STRING, description: "Kanji or main word" },
-                kana: { type: Type.STRING, description: "Furigana/Reading in Kana" },
-                romaji: { type: Type.STRING, description: "Reading in Romaji" },
+                term: { type: Type.STRING },
+                kana: { type: Type.STRING },
+                romaji: { type: Type.STRING },
                 meaning: { 
                   type: Type.OBJECT, 
                   properties: {
-                    en: { type: Type.STRING, description: "English meaning" },
-                    zh: { type: Type.STRING, description: "Chinese meaning" }
+                    en: { type: Type.STRING },
+                    zh: { type: Type.STRING }
                   },
                   required: ["en", "zh"]
                 },
-                type: { type: Type.STRING, description: "Noun, Verb, etc." }
+                type: { type: Type.STRING }
               }
             }
           },
@@ -131,41 +116,91 @@ export const generateScenarioContent = async (scenario: string, language: Langua
               type: Type.OBJECT,
               properties: {
                 phrase: { type: Type.STRING },
-                kana: { type: Type.STRING, description: "Reading in Kana" },
-                romaji: { type: Type.STRING, description: "Reading in Romaji" },
+                kana: { type: Type.STRING },
+                romaji: { type: Type.STRING },
                 meaning: { 
                   type: Type.OBJECT, 
                   properties: {
-                    en: { type: Type.STRING, description: "English meaning" },
-                    zh: { type: Type.STRING, description: "Chinese meaning" }
+                    en: { type: Type.STRING },
+                    zh: { type: Type.STRING }
                   },
                   required: ["en", "zh"]
                 },
-                nuance: { type: Type.STRING, description: "e.g., Polite, Casual" }
+                nuance: { type: Type.STRING }
               }
             }
-          },
+          }
+        }
+      }
+    }
+  });
+
+  if (response.text) {
+    const result = JSON.parse(response.text) as Partial<ScenarioContent>;
+    result.scenarioName = scenario;
+    result.dialogues = []; // Initialize empty
+    return result;
+  }
+  throw new Error("Failed to generate vocabulary");
+};
+
+// STEP 2: Generate Dialogues (SLOWER, runs in background)
+export const generateDialoguesOnly = async (
+  scenario: string, 
+  contextVocabulary: VocabularyItem[], 
+  language: Language = 'zh', 
+  customApiKey?: string
+): Promise<any[]> => {
+  const ai = getAiInstance(customApiKey);
+
+  // Context injection: We pass the vocab list so the dialogue uses the words we just generated
+  const vocabList = contextVocabulary.slice(0, 15).map(v => v.term).join(", ");
+
+  const prompt = `
+    Write a realistic Japanese conversation for: "${scenario}".
+    
+    Context: Incorporate some of these words if natural: ${vocabList}.
+
+    Structure: STRICTLY 3 distinct chronological sub-scenes.
+    1. Introduction/Request.
+    2. Process/Interaction (Longest part).
+    3. Conclusion/Farewell (MUST end with a closing statement like "Arigatou", not a question).
+    
+    Rules:
+    - Each sub-scene needs 6-8 lines.
+    - Speaker A and B.
+    - Full Kana/Romaji/Translation (English & Chinese) for every line.
+  `;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
           dialogues: {
             type: Type.ARRAY,
             items: {
               type: Type.OBJECT,
               properties: {
-                title: { type: Type.STRING, description: "Sub-scene title" },
+                title: { type: Type.STRING },
                 lines: {
                   type: Type.ARRAY,
                   items: {
                     type: Type.OBJECT,
                     properties: {
                       speaker: { type: Type.STRING, enum: ["A", "B"] },
-                      roleName: { type: Type.STRING, description: "e.g. Staff, Customer" },
+                      roleName: { type: Type.STRING },
                       japanese: { type: Type.STRING },
-                      kana: { type: Type.STRING, description: "Reading in Kana" },
-                      romaji: { type: Type.STRING, description: "Reading in Romaji" },
+                      kana: { type: Type.STRING },
+                      romaji: { type: Type.STRING },
                       translation: { 
                         type: Type.OBJECT, 
                         properties: {
-                          en: { type: Type.STRING, description: "English translation" },
-                          zh: { type: Type.STRING, description: "Chinese translation" }
+                          en: { type: Type.STRING },
+                          zh: { type: Type.STRING }
                         },
                         required: ["en", "zh"]
                       }
@@ -181,47 +216,25 @@ export const generateScenarioContent = async (scenario: string, language: Langua
   });
 
   if (response.text) {
-    const result = JSON.parse(response.text) as ScenarioContent;
-    
-    // SANITIZATION: Deep clean to prevent UI crashes
-    
-    // 1. Ensure arrays exist
-    if (!result.vocabulary) result.vocabulary = [];
-    if (!result.expressions) result.expressions = [];
-    if (!result.dialogues) result.dialogues = [];
-
-    // 2. Filter out corrupt items (missing essential fields)
-    result.vocabulary = result.vocabulary.filter(item => 
-      item && 
-      item.term && 
-      item.meaning && // Ensure meaning object exists
-      (typeof item.meaning === 'string' || (item.meaning.en || item.meaning.zh))
-    );
-
-    result.expressions = result.expressions.filter(item => 
-      item && 
-      item.phrase && 
-      item.meaning &&
-      (typeof item.meaning === 'string' || (item.meaning.en || item.meaning.zh))
-    );
-
-    result.dialogues = result.dialogues.filter(d => d && d.lines && Array.isArray(d.lines));
-    
-    // 3. Clean dialogue lines
-    result.dialogues.forEach(d => {
-       d.lines = d.lines.filter(l => 
-         l && 
-         l.japanese && 
-         l.translation &&
-         (typeof l.translation === 'string' || (l.translation.en || l.translation.zh))
-       );
-    });
-
-    // FORCE the scenario name to match the requested input to prevent ID drift in history
-    result.scenarioName = scenario;
-    return result;
+    const result = JSON.parse(response.text);
+    return result.dialogues || [];
   }
-  throw new Error("Failed to generate content");
+  throw new Error("Failed to generate dialogues");
+};
+
+// Keep the old full generation function for fallback/regenerate all if needed
+export const generateScenarioContent = async (scenario: string, language: Language = 'zh', customApiKey?: string): Promise<ScenarioContent> => {
+   // Implementation reused for single-shot generation (e.g. from history regeneration)
+   const part1 = await generateVocabularyAndExpressions(scenario, language, customApiKey);
+   const part2 = await generateDialoguesOnly(scenario, part1.vocabulary || [], language, customApiKey);
+   
+   return {
+     scenarioName: scenario,
+     vocabulary: part1.vocabulary || [],
+     expressions: part1.expressions || [],
+     dialogues: part2,
+     timestamp: Date.now()
+   };
 };
 
 // Retrieve AudioBuffer for text (from Cache or Network)

@@ -11,6 +11,7 @@ interface Props {
   notation: Notation;
   voiceEngine?: VoiceEngine;
   onRetry?: () => void;
+  isGenerating?: boolean;
 }
 
 const getTranslation = (trans: string | { en: string; zh: string } | undefined, lang: Language) => {
@@ -19,7 +20,7 @@ const getTranslation = (trans: string | { en: string; zh: string } | undefined, 
   return trans[lang] || trans.en || '';
 };
 
-export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, voiceEngine = 'system', onRetry }) => {
+export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, voiceEngine = 'system', onRetry, isGenerating }) => {
   const [activeSectionIdx, setActiveSectionIdx] = useState<number>(0);
   const [playingLine, setPlayingLine] = useState<{sectionIdx: number, lineIdx: number} | null>(null);
   const [recordingLine, setRecordingLine] = useState<{sectionIdx: number, lineIdx: number} | null>(null);
@@ -30,6 +31,32 @@ export const DialoguePlayer: React.FC<Props> = ({ sections, language, notation, 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const t = UI_TEXT[language];
+
+  // Loading State
+  if (isGenerating && (!sections || sections.length === 0)) {
+    return (
+      <div className="w-full h-full flex flex-col md:flex-row gap-6 animate-pulse">
+         {/* Sidebar Skeleton */}
+         <div className="md:w-64 flex-shrink-0 flex flex-row md:flex-col gap-2">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-16 bg-white rounded-xl border border-slate-100 p-3 flex items-center gap-3">
+                 <div className="w-8 h-8 rounded-lg bg-slate-200"></div>
+                 <div className="flex-1 space-y-2">
+                    <div className="h-2 w-12 bg-slate-200 rounded"></div>
+                    <div className="h-3 w-20 bg-slate-200 rounded"></div>
+                 </div>
+              </div>
+            ))}
+         </div>
+         {/* Main Content Skeleton */}
+         <div className="flex-1 bg-white rounded-2xl border border-slate-100 p-6 flex flex-col items-center justify-center min-h-[500px]">
+            <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mb-4" />
+            <p className="text-slate-500 font-medium">Writing Dialogues...</p>
+            <p className="text-slate-400 text-sm mt-2">This usually takes about 10-15 seconds.</p>
+         </div>
+      </div>
+    );
+  }
 
   // Safety Guard for empty content
   if (!sections || sections.length === 0) {

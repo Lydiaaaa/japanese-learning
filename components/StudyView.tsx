@@ -20,6 +20,7 @@ interface StudyViewProps {
   onDeleteVersion: () => void;
   notation: Notation;
   voiceEngine: VoiceEngine;
+  isGeneratingDialogues?: boolean;
 }
 
 type Tab = 'vocab' | 'expressions' | 'dialogue';
@@ -41,7 +42,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
   onSelectVersion,
   onDeleteVersion,
   notation,
-  voiceEngine
+  voiceEngine,
+  isGeneratingDialogues
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('vocab');
   const scrollContainerRef = useRef<HTMLDivElement>(null); 
@@ -343,7 +345,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
                 activeTab === 'dialogue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              <MessageCircle className="w-4 h-4" />
+              {isGeneratingDialogues ? <Loader2 className="w-3 h-3 animate-spin text-indigo-500" /> : <MessageCircle className="w-4 h-4" />}
               {t.dialogue}
             </button>
           </div>
@@ -388,6 +390,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
               notation={notation} 
               voiceEngine={voiceEngine}
               onRetry={onRegenerate}
+              isGenerating={isGeneratingDialogues}
             />
           )}
         </div>
