@@ -7,7 +7,7 @@ import { ScenariosListView } from './components/ScenariosListView';
 import { UserMenu } from './components/UserMenu';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine, DialogueSection } from './types';
-import { generateVocabularyAndExpressions, generateDialoguesWithCallback, generateMoreItems } from './services/geminiService';
+import { generateVocabularyAndExpressions, generateDialoguesWithCallback, generateMoreItems, regenerateSection } from './services/geminiService';
 import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario, User, checkDailyQuota, incrementDailyQuota, checkIsAdmin } from './services/firebase';
 import { Loader2, AlertCircle, RefreshCw, Globe, Star, Settings, Type, Zap, Key } from 'lucide-react';
 import { UI_TEXT } from './constants';
@@ -267,7 +267,7 @@ export default function App() {
     }
   };
 
-  // --- NEW: Handle Load More Items ---
+  // --- NEW: Handle Load More Items (Incremental Append) ---
   const handleLoadMoreItems = async (type: 'vocab' | 'expression') => {
     if (!currentContent) return;
 
@@ -323,6 +323,57 @@ export default function App() {
 
     } catch (e) {
       console.error("Failed to load more items", e);
+      alert(t.errorDesc);
+    }
+  };
+
+  // --- NEW: Handle Retry Specific Section (Smart Regenerate in place) ---
+  const handleRetrySection = async (type: 'vocab' | 'expression') => {
+    if (!currentContent) return;
+
+    try {
+      // 1. Call Service to get standard list (repair mode)
+      const repairedItems = await regenerateSection(
+        currentContent.scenarioName,
+        type,
+        language,
+        customApiKey || undefined
+      );
+
+      // 2. Update State in place (no new version)
+      if (repairedItems && repairedItems.length > 0) {
+        const updatedContent = { ...currentContent };
+        
+        if (type === 'vocab') {
+           updatedContent.vocabulary = repairedItems as any;
+        } else {
+           updatedContent.expressions = repairedItems as any;
+        }
+
+        // Update current view
+        setCurrentContent(updatedContent);
+
+        // Update current version in the versions list
+        setCurrentVersions(prev => {
+          const updated = [...prev];
+          updated[currentVersionIndex] = updatedContent;
+          return updated;
+        });
+
+        // Update persistent history
+        setScenarioHistory(prev => {
+           return prev.map(item => {
+              if (item.id === currentContent.scenarioName) {
+                 const newVersions = [...item.versions];
+                 newVersions[currentVersionIndex] = updatedContent;
+                 return { ...item, versions: newVersions };
+              }
+              return item;
+           });
+        });
+      }
+    } catch (e) {
+      console.error("Failed to repair section", e);
       alert(t.errorDesc);
     }
   };
@@ -802,6 +853,7 @@ export default function App() {
             voiceEngine={voiceEngine}
             isGeneratingDialogues={isGeneratingDialogues}
             onLoadMoreItems={handleLoadMoreItems}
+            onRetrySection={handleRetrySection}
           />
         )}
 

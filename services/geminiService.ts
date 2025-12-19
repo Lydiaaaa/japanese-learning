@@ -244,7 +244,100 @@ export const generateVocabularyAndExpressions = async (
   };
 };
 
-// --- NEW FUNCTION: GENERATE MORE ITEMS ---
+// --- REPAIR FUNCTION: REGENERATE SPECIFIC SECTION ---
+// This is used when a section failed to generate (empty), so we fetch standard counts, not "new/more" items.
+export const regenerateSection = async (
+  scenario: string,
+  type: 'vocab' | 'expression',
+  language: Language = 'zh',
+  customApiKey?: string
+): Promise<(VocabularyItem | ExpressionItem)[]> => {
+  const ai = getAiInstance(customApiKey);
+  const langName = language === 'zh' ? 'Simplified Chinese' : 'English';
+  
+  const isVocab = type === 'vocab';
+  const label = isVocab ? 'vocabulary words' : 'common phrases/expressions';
+  // Standard initial counts
+  const count = isVocab ? 12 : 8; 
+  
+  const prompt = `
+    Context: Japanese learning scenario "${scenario}".
+    Task: Create a Japanese language study list of ${count} essential ${label}.
+    
+    Requirements:
+    - Highly relevant to the scenario.
+    - Definitions in English and ${langName}.
+    
+    Output strictly in JSON.
+  `;
+
+  // Define Schema based on type
+  const vocabSchema = {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        term: { type: Type.STRING },
+        kana: { type: Type.STRING },
+        romaji: { type: Type.STRING },
+        meaning: { 
+          type: Type.OBJECT, 
+          properties: {
+            en: { type: Type.STRING },
+            zh: { type: Type.STRING }
+          },
+          required: ["en", "zh"]
+        },
+        type: { type: Type.STRING }
+      }
+    }
+  };
+
+  const exprSchema = {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        phrase: { type: Type.STRING },
+        kana: { type: Type.STRING },
+        romaji: { type: Type.STRING },
+        meaning: { 
+          type: Type.OBJECT, 
+          properties: {
+            en: { type: Type.STRING },
+            zh: { type: Type.STRING }
+          },
+          required: ["en", "zh"]
+        },
+        nuance: { type: Type.STRING }
+      }
+    }
+  };
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: isVocab ? vocabSchema : exprSchema
+      }
+    });
+
+    if (response.text) {
+      const cleanText = cleanJsonText(response.text);
+      const result = JSON.parse(cleanText);
+      return Array.isArray(result) ? result : [];
+    }
+  } catch (e) {
+    console.error(`Regenerate ${type} error`, e);
+  }
+
+  return [];
+};
+
+
+// --- GENERATE MORE ITEMS (APPEND) ---
 export const generateMoreItems = async (
   scenario: string,
   type: 'vocab' | 'expression',
@@ -253,7 +346,6 @@ export const generateMoreItems = async (
   customApiKey?: string
 ): Promise<(VocabularyItem | ExpressionItem)[]> => {
   const ai = getAiInstance(customApiKey);
-  const langName = language === 'zh' ? 'Simplified Chinese' : 'English';
   
   const isVocab = type === 'vocab';
   const label = isVocab ? 'vocabulary words' : 'common phrases/expressions';

@@ -13,7 +13,7 @@ interface Props {
   notation: Notation;
   language?: Language; 
   voiceEngine?: VoiceEngine;
-  onRetry?: () => void;
+  onRetry?: () => Promise<void>;
   onLoadMore?: () => Promise<void>;
   canLoadMore?: boolean;
 }
@@ -38,20 +38,32 @@ export const VocabularyList: React.FC<Props> = ({
 }) => {
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const t = UI_TEXT[language];
 
   // Safety guard for empty items
   if (!items || items.length === 0) {
+    const handleRetryClick = async () => {
+        if (!onRetry || isRetrying) return;
+        setIsRetrying(true);
+        try {
+            await onRetry();
+        } finally {
+            setIsRetrying(false);
+        }
+    };
+
     return (
       <div className="flex flex-col items-center justify-center h-64 text-center p-8 text-slate-400 bg-slate-50 rounded-xl border border-slate-100 border-dashed">
         <p className="mb-4">No items available.</p>
         {onRetry && (
           <button 
-            onClick={onRetry}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-sm font-medium text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-all"
+            onClick={handleRetryClick}
+            disabled={isRetrying}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-sm font-medium text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <RefreshCw className="w-4 h-4" />
-            <span>Regenerate</span>
+            {isRetrying ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            <span>{isRetrying ? 'Generating...' : 'Regenerate'}</span>
           </button>
         )}
       </div>

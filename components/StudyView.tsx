@@ -22,6 +22,7 @@ interface StudyViewProps {
   voiceEngine: VoiceEngine;
   isGeneratingDialogues?: boolean;
   onLoadMoreItems?: (type: 'vocab' | 'expression') => Promise<void>;
+  onRetrySection?: (type: 'vocab' | 'expression') => Promise<void>;
 }
 
 type Tab = 'vocab' | 'expressions' | 'dialogue';
@@ -45,7 +46,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
   notation,
   voiceEngine,
   isGeneratingDialogues,
-  onLoadMoreItems
+  onLoadMoreItems,
+  onRetrySection
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('vocab');
   const scrollContainerRef = useRef<HTMLDivElement>(null); 
@@ -106,6 +108,15 @@ export const StudyView: React.FC<StudyViewProps> = ({
           }
       } catch (e) {
           console.error(e);
+      }
+  };
+
+  const handleRetrySpecific = async (type: 'vocab' | 'expression') => {
+      if (onRetrySection) {
+          await onRetrySection(type);
+      } else {
+          // Fallback to global regenerate if specific handler isn't available
+          onRegenerate();
       }
   };
 
@@ -393,7 +404,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
               notation={notation}
               language={language}
               voiceEngine={voiceEngine}
-              onRetry={onRegenerate}
+              onRetry={() => handleRetrySpecific('vocab')}
               onLoadMore={() => handleLoadMore('vocab')}
               canLoadMore={vocabLoadCount < 2}
             />
@@ -408,7 +419,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
               notation={notation}
               language={language}
               voiceEngine={voiceEngine}
-              onRetry={onRegenerate}
+              onRetry={() => handleRetrySpecific('expression')}
               onLoadMore={() => handleLoadMore('expression')}
               canLoadMore={expressionLoadCount < 2}
             />
