@@ -237,7 +237,7 @@ const generateSingleScene = async (
 
   const titleLanguage = language === 'zh' ? "Simplified Chinese (简体中文)" : "English";
 
-  // Reduced line count to 4-6 to prevent timeouts and improve stability
+  // Strict instructions for consistency
   const prompt = `
     Write Scene ${sceneIndex}/3 for: "${scenario}".
     Type: ${sceneType}.
@@ -246,13 +246,23 @@ const generateSingleScene = async (
     
     Output strictly valid JSON (No Markdown).
     
+    CRITICAL RULES:
+    1. "title": Short, specific title for this scene in ${titleLanguage}. DO NOT include the scenario name "${scenario}" in the title.
+    2. "lines": Array of dialogue turns.
+    3. "speaker": MUST be strictly "A" or "B". 
+       - Speaker "A" is the User/Learner (Protagonist).
+       - Speaker "B" is the Counterpart (Native Speaker).
+    4. "roleName": Display name in ${titleLanguage}. 
+       - For A: "我" (Me) or "User".
+       - For B: Specific role (e.g. "店员", "上司", "Staff", "Manager"). Keep it consistent.
+
     Structure:
     {
       "title": "Title in ${titleLanguage}",
       "lines": [
         {
           "speaker": "A",
-          "roleName": "Student",
+          "roleName": "我",
           "japanese": "...",
           "kana": "...",
           "romaji": "...",
@@ -262,8 +272,8 @@ const generateSingleScene = async (
     }
 
     Requirements:
-    1. Title MUST be in ${titleLanguage}.
-    2. 4-6 dialogue turns (Keep it concise).
+    - 4-6 concise dialogue turns.
+    - Natural Japanese spoken style.
   `;
 
   try {
@@ -275,9 +285,6 @@ const generateSingleScene = async (
       contents: prompt,
       config: {
         responseMimeType: "application/json",
-        // We do NOT set responseSchema here to allow the model more flexibility 
-        // in structure, which we then handle with robust parsing.
-        // Setting schema sometimes causes strict validation errors on the API side.
       }
     });
 
@@ -300,22 +307,54 @@ const generateSingleScene = async (
       
       // Robust Parsing: recursively search for lines
       const lines = findDialogueLines(parsed);
-      const title = findTitle(parsed, `Scene ${sceneIndex}`);
+      let title = findTitle(parsed, `Scene ${sceneIndex}`);
 
       if (!lines) {
          console.warn("Parsed object missing lines array:", parsed);
          throw new Error("Response format missing dialogue lines");
       }
+
+      // --- TITLE CLEANING LOGIC ---
+      // Remove the main scenario name if the AI included it (e.g., "Dining: Opening" -> "Opening")
+      try {
+        const scenarioNamePattern = new RegExp(`^${scenario.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:\\-]?\\s*`, 'i');
+        title = title.replace(scenarioNamePattern, '');
+        // Also remove "Scene X" prefix if redundant
+        title = title.replace(/^(Scene|场景)\s*\d+\s*[:\\-]?\s*/i, '');
+      } catch (err) {
+        // Fallback if regex fails
+      }
       
-      // Sanitize lines to match interface
-      const sanitizedLines: DialogueLine[] = lines.map((l: any) => ({
-          speaker: l.speaker || 'A',
-          roleName: l.roleName || (l.speaker === 'A' ? 'User' : 'Partner'),
-          japanese: l.japanese || l.text || '...',
-          kana: l.kana || '',
-          romaji: l.romaji || '',
-          translation: l.translation || { en: '', zh: '' }
-      }));
+      // Sanitize lines to match interface and enforce UI alignment
+      const sanitizedLines: DialogueLine[] = lines.map((l: any) => {
+          // Normalize speaker to strictly A or B
+          // If the AI returns a name like "Student" in speaker, map it to A
+          let cleanSpeaker: 'A' | 'B' = 'A'; // Default to A
+          
+          if (l.speaker === 'B' || l.speaker === 'b') cleanSpeaker = 'B';
+          else if (l.speaker === 'A' || l.speaker === 'a') cleanSpeaker = 'A';
+          else {
+             // Heuristic fallback: if roleName implies 'me' or 'user' -> A, else B
+             const r = (l.roleName || '').toLowerCase();
+             if (r.includes('me') || r.includes('user') || r.includes('student') || r.includes('我')) {
+                 cleanSpeaker = 'A';
+             } else {
+                 cleanSpeaker = 'B'; // Default undefined to partner to be safe? Or stick to A.
+                 // Actually, let's assume if it's not explicitly A, it's B (Counterpart) 
+                 // UNLESS it's the first line, which is usually A. 
+                 // But safer to let Prompt instruction handle it.
+             }
+          }
+
+          return {
+            speaker: cleanSpeaker,
+            roleName: l.roleName || (cleanSpeaker === 'A' ? 'Me' : 'Partner'),
+            japanese: l.japanese || l.text || '...',
+            kana: l.kana || '',
+            romaji: l.romaji || '',
+            translation: l.translation || { en: '', zh: '' }
+          };
+      });
 
       return {
           title,
@@ -331,8 +370,7 @@ const generateSingleScene = async (
       return generateSingleScene(scenario, sceneIndex, sceneType, contextVocab, language, customApiKey, attempt + 1);
     }
     
-    // FALLBACK OBJECT (Prevents UI Crash)
-    // If all attempts fail, return a placeholder scene so the app doesn't break.
+    // FALLBACK OBJECT
     return {
       title: `Scene ${sceneIndex} (Unavailable)`,
       lines: [{
@@ -362,7 +400,6 @@ export const generateDialoguesWithCallback = async (
   const vocabList = contextVocabulary.slice(0, 8).map(v => v.term).join(", ");
 
   // Fire requests. We do NOT await Promise.all here because we want to trigger callbacks individually.
-  // We use .then() to handle successful completion of each promise independently.
   
   const p1 = generateSingleScene(scenario, 1, "Intro", vocabList, language, customApiKey)
     .then(scene => onSceneComplete(0, scene));
