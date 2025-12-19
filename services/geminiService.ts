@@ -70,13 +70,20 @@ export const generateScenarioContent = async (scenario: string, language: Langua
   const ai = getAiInstance(customApiKey);
 
   // Updated Prompt to explicitly request full pronunciation data AND bilingual translations
+  // Added specific instructions for dialogue length and depth.
   const prompt = `
     Create a comprehensive Japanese language study guide for the specific scenario: "${scenario}".
     
     Requirements:
     1. Vocabulary: 30-35 essential words specific to this scenario. Include Kana (Hiragana/Katakana) and Romaji. Provide meanings in BOTH English and Simplified Chinese.
+    
     2. Expressions: 15-20 common useful phrases/sentence patterns. Include full reading in Kana and Romaji. Provide meanings in BOTH English and Simplified Chinese.
-    3. Dialogues: Create a realistic conversation flow broken down into 3 distinct chronological sub-scenes. Include full reading in Kana and Romaji for every line. Provide translations in BOTH English and Simplified Chinese.
+    
+    3. Dialogues: Create a detailed, realistic, and extensive conversation flow broken down into 3 distinct chronological sub-scenes.
+       - CRITICAL: Each sub-scene MUST contain at least 6-8 lines of back-and-forth dialogue to fully explore the interaction (Total 18-24 lines minimum).
+       - For service scenarios (e.g., banking, hotels, government), include realistic details like confirming information, asking clarifying questions, handling small problems, or polite formalities. Do not make the conversation too simple or abrupt.
+       - Include full reading in Kana and Romaji for every line.
+       - Provide translations in BOTH English and Simplified Chinese.
     
     Ensure natural Japanese suitable for daily life.
   `;

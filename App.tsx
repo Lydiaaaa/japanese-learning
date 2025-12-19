@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Home } from './components/Home';
 import { StudyView } from './components/StudyView';
@@ -313,16 +314,25 @@ export default function App() {
     setViewState(ViewState.GENERATING);
     setLoadingStep(0); // Reset loading step
     
-    // Simulate progress updates for better UX
-    const progressInterval = setInterval(() => {
-      setLoadingStep(prev => (prev < 4 ? prev + 1 : prev));
-    }, 2800); // Update message every 2.8 seconds
+    // Define a variable timeline for progress simulation
+    // Step 0: Analysis (Start)
+    // Step 1: Vocabulary (starts at 2000ms)
+    // Step 2: Expressions (starts at 5000ms) - Vocabulary took 3s
+    // Step 3: Dialogues (starts at 9000ms) - Expressions took 4s
+    // Step 4: Finalizing (starts at 16000ms) - Dialogues took 7s (Main work)
+    const timeline = [2000, 5000, 9000, 16000];
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    timeline.forEach((time, index) => {
+        const timer = setTimeout(() => {
+            setLoadingStep(index + 1);
+        }, time);
+        timers.push(timer);
+    });
 
     try {
       const content = await generateScenarioContent(scenarioName, language, overrideKey || customApiKey || undefined);
       
-      clearInterval(progressInterval); // Clear timer on success
-
       // If we used the free quota (no custom key), increment usage
       if (!overrideKey && !customApiKey) {
         incrementDailyQuota(user);
@@ -341,10 +351,12 @@ export default function App() {
       setCurrentContent(savedVersion);
       setViewState(ViewState.STUDY);
     } catch (err) {
-      clearInterval(progressInterval); // Clear timer on error
       console.error(err);
       setErrorMsg(t.errorDesc);
       setViewState(ViewState.ERROR);
+    } finally {
+      // Clear any pending state updates if the process finishes or fails
+      timers.forEach(clearTimeout);
     }
   };
 
