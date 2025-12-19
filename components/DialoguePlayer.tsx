@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { DialogueSection, Language, Notation, VoiceEngine } from '../types';
 import { Play, Pause, Mic, Volume2, MessageSquare, Download, Loader2, RefreshCw, PenTool } from 'lucide-react';
 import { playTTS, generateDialogueAudioWithProgress } from '../services/geminiService';
@@ -42,7 +42,23 @@ export const DialoguePlayer: React.FC<Props> = ({
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const contentTopRef = useRef<HTMLDivElement>(null);
+  
   const t = UI_TEXT[language];
+
+  // Scroll to top when active section changes
+  useEffect(() => {
+    if (contentTopRef.current) {
+        // Try to find the scrollable parent container in StudyView
+        const scrollableParent = contentTopRef.current.closest('.overflow-y-auto');
+        if (scrollableParent) {
+            scrollableParent.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            // Fallback
+            contentTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+  }, [activeSectionIdx]);
 
   // Helper to check if ANY content exists
   const hasAnyContent = sections && sections.some(s => !!s);
@@ -240,7 +256,7 @@ export const DialoguePlayer: React.FC<Props> = ({
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col min-h-[500px] w-full">
+      <div ref={contentTopRef} className="flex-1 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col min-h-[500px] w-full">
         {isSectionLoading ? (
            // Skeleton for Active Loading Section
            <div className="flex flex-col items-center justify-center h-full p-8 text-center flex-1 animate-in fade-in zoom-in-95 duration-500">
