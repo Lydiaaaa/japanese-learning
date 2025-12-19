@@ -130,17 +130,17 @@ const findTitle = (obj: any, defaultTitle: string): string => {
 // --- NEW SPLIT GENERATION FUNCTIONS ---
 
 // STEP 1: Generate Vocabulary, Expressions AND ROLES (FAST)
+// NOW UPDATED: Performs two parallel requests to ensure reliability.
 export const generateVocabularyAndExpressions = async (
   scenario: string, 
   language: Language = 'zh', 
   customApiKey?: string
 ): Promise<Partial<ScenarioContent> & { roles?: { user: string, partner: string } }> => {
   const ai = getAiInstance(customApiKey);
-
   const langName = language === 'zh' ? 'Simplified Chinese' : 'English';
 
-  // OPTIMIZED PROMPT: Reduced item counts to prevent timeouts and JSON errors
-  const prompt = `
+  // --- SUB-REQUEST 1: SETUP & VOCABULARY ---
+  const vocabPrompt = `
     Analyze the scenario: "${scenario}".
     
     Task 1: Define the two specific roles for this roleplay conversation.
@@ -148,88 +148,128 @@ export const generateVocabularyAndExpressions = async (
     - partnerRole: The person they are talking to (e.g., "Neighbor", "Waiter", "Doctor"). Name MUST be in ${langName}.
     - Ensure these roles make sense together for the context "${scenario}".
     
-    Task 2: Create a Japanese language study list.
-    - Vocabulary: 12-15 essential words. (Keep definitions concise).
-    - Expressions: 6-8 common useful phrases. (Keep definitions concise).
+    Task 2: Create a Japanese language study list of 12-15 essential Vocabulary words.
     
     Output strictly in JSON.
   `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
+  const vocabSchema = {
+    type: Type.OBJECT,
+    properties: {
+      setup: {
           type: Type.OBJECT,
           properties: {
-            setup: {
-               type: Type.OBJECT,
-               properties: {
-                  userRole: { type: Type.STRING, description: `The user's role name in ${langName}` },
-                  partnerRole: { type: Type.STRING, description: `The partner's role name in ${langName}` }
-               },
-               required: ["userRole", "partnerRole"]
+            userRole: { type: Type.STRING, description: `The user's role name in ${langName}` },
+            partnerRole: { type: Type.STRING, description: `The partner's role name in ${langName}` }
+          },
+          required: ["userRole", "partnerRole"]
+      },
+      vocabulary: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            term: { type: Type.STRING },
+            kana: { type: Type.STRING },
+            romaji: { type: Type.STRING },
+            meaning: { 
+              type: Type.OBJECT, 
+              properties: {
+                en: { type: Type.STRING },
+                zh: { type: Type.STRING }
+              },
+              required: ["en", "zh"]
             },
-            vocabulary: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  term: { type: Type.STRING },
-                  kana: { type: Type.STRING },
-                  romaji: { type: Type.STRING },
-                  meaning: { 
-                    type: Type.OBJECT, 
-                    properties: {
-                      en: { type: Type.STRING },
-                      zh: { type: Type.STRING }
-                    },
-                    required: ["en", "zh"]
-                  },
-                  type: { type: Type.STRING }
-                }
-              }
-            },
-            expressions: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  phrase: { type: Type.STRING },
-                  kana: { type: Type.STRING },
-                  romaji: { type: Type.STRING },
-                  meaning: { 
-                    type: Type.OBJECT, 
-                    properties: {
-                      en: { type: Type.STRING },
-                      zh: { type: Type.STRING }
-                    },
-                    required: ["en", "zh"]
-                  },
-                  nuance: { type: Type.STRING }
-                }
-              }
-            }
+            type: { type: Type.STRING }
           }
         }
       }
-    });
-
-    if (response.text) {
-      const cleanText = cleanJsonText(response.text);
-      const result = JSON.parse(cleanText);
-      
-      return {
-        scenarioName: scenario,
-        vocabulary: result.vocabulary || [],
-        expressions: result.expressions || [],
-        dialogues: [],
-        // Return the determined roles to be passed to step 2
-        roles: result.setup ? { user: result.setup.userRole, partner: result.setup.partnerRole } : undefined
-      };
     }
+  };
+
+  // --- SUB-REQUEST 2: EXPRESSIONS ---
+  const expressionPrompt = `
+    Context: Japanese learning scenario "${scenario}".
+    Task: Create a list of 6-8 common useful Expressions/Phrases for this scenario.
+    
+    Output strictly in JSON.
+  `;
+
+  const expressionSchema = {
+    type: Type.OBJECT,
+    properties: {
+      expressions: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            phrase: { type: Type.STRING },
+            kana: { type: Type.STRING },
+            romaji: { type: Type.STRING },
+            meaning: { 
+              type: Type.OBJECT, 
+              properties: {
+                en: { type: Type.STRING },
+                zh: { type: Type.STRING }
+              },
+              required: ["en", "zh"]
+            },
+            nuance: { type: Type.STRING }
+          }
+        }
+      }
+    }
+  };
+
+  try {
+    // EXECUTE IN PARALLEL
+    // This splits the load and prevents truncation of the second part (expressions)
+    // if the vocabulary list is long.
+    const [vocabResponse, exprResponse] = await Promise.all([
+      ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: vocabPrompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: vocabSchema
+        }
+      }),
+      ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: expressionPrompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: expressionSchema
+        }
+      })
+    ]);
+
+    let vocabData: any = {};
+    let exprData: any = {};
+
+    if (vocabResponse.text) {
+      const cleanVocab = cleanJsonText(vocabResponse.text);
+      try {
+         vocabData = JSON.parse(cleanVocab);
+      } catch (e) { console.error("Vocab JSON parse failed", e); }
+    }
+
+    if (exprResponse.text) {
+      const cleanExpr = cleanJsonText(exprResponse.text);
+      try {
+         exprData = JSON.parse(cleanExpr);
+      } catch (e) { console.error("Expression JSON parse failed", e); }
+    }
+      
+    return {
+      scenarioName: scenario,
+      vocabulary: vocabData.vocabulary || [],
+      expressions: exprData.expressions || [],
+      dialogues: [],
+      // Return the determined roles to be passed to step 2
+      roles: vocabData.setup ? { user: vocabData.setup.userRole, partner: vocabData.setup.partnerRole } : undefined
+    };
+
   } catch (e) {
     console.error("Vocab generation error", e);
   }
