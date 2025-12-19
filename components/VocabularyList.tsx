@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
 import { VocabularyItem, ExpressionItem, SavedItem, Notation, Language, VoiceEngine } from '../types';
-import { Volume2, Star, Loader2, RefreshCw } from 'lucide-react';
+import { Volume2, Star, Loader2, RefreshCw, PlusCircle } from 'lucide-react';
 import { playTTS } from '../services/geminiService';
+import { UI_TEXT } from '../constants';
 
 interface Props {
   items: (VocabularyItem | ExpressionItem)[];
@@ -13,6 +14,8 @@ interface Props {
   language?: Language; 
   voiceEngine?: VoiceEngine;
   onRetry?: () => void;
+  onLoadMore?: () => Promise<void>;
+  canLoadMore?: boolean;
 }
 
 const getMeaning = (meaning: string | { en: string; zh: string } | undefined, lang: Language) => {
@@ -29,9 +32,13 @@ export const VocabularyList: React.FC<Props> = ({
   notation, 
   language = 'zh',
   voiceEngine = 'system',
-  onRetry
+  onRetry,
+  onLoadMore,
+  canLoadMore = false
 }) => {
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const t = UI_TEXT[language];
 
   // Safety guard for empty items
   if (!items || items.length === 0) {
@@ -84,52 +91,80 @@ export const VocabularyList: React.FC<Props> = ({
     });
   };
 
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-1">
-      {items.map((item, idx) => {
-        const isVocab = type === 'vocab';
-        const mainText = isVocab ? (item as VocabularyItem).term : (item as ExpressionItem).phrase;
-        
-        const kana = isVocab ? (item as VocabularyItem).kana : (item as ExpressionItem).kana;
-        const romaji = isVocab ? (item as VocabularyItem).romaji : (item as ExpressionItem).romaji;
-        const subText = notation === 'kana' ? kana : romaji;
-        
-        const meaning = getMeaning(item.meaning, language as Language);
-        const tag = isVocab ? (item as VocabularyItem).type : null;
-        const saved = isSaved(item);
+  const handleLoadMoreClick = async () => {
+     if (isLoadingMore || !onLoadMore) return;
+     setIsLoadingMore(true);
+     await onLoadMore();
+     setIsLoadingMore(false);
+  };
 
-        return (
-          <div key={idx} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-between hover:border-indigo-100 transition-colors">
-            <div className="flex justify-between items-start mb-2">
-              <div className="flex-1">
-                {tag && (
-                  <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 mb-1">
-                    {tag}
-                  </span>
-                )}
-                <h3 className="text-xl font-bold text-slate-800">{mainText}</h3>
-                {subText && <p className="text-sm text-indigo-600 font-medium">{subText}</p>}
+  return (
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-1 mb-8">
+        {items.map((item, idx) => {
+          const isVocab = type === 'vocab';
+          const mainText = isVocab ? (item as VocabularyItem).term : (item as ExpressionItem).phrase;
+          
+          const kana = isVocab ? (item as VocabularyItem).kana : (item as ExpressionItem).kana;
+          const romaji = isVocab ? (item as VocabularyItem).romaji : (item as ExpressionItem).romaji;
+          const subText = notation === 'kana' ? kana : romaji;
+          
+          const meaning = getMeaning(item.meaning, language as Language);
+          const tag = isVocab ? (item as VocabularyItem).type : null;
+          const saved = isSaved(item);
+
+          return (
+            <div key={idx} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-between hover:border-indigo-100 transition-colors animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex-1">
+                  {tag && (
+                    <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 mb-1">
+                      {tag}
+                    </span>
+                  )}
+                  <h3 className="text-xl font-bold text-slate-800">{mainText}</h3>
+                  {subText && <p className="text-sm text-indigo-600 font-medium">{subText}</p>}
+                </div>
+                <button 
+                  onClick={() => handleToggle(item)}
+                  className={`p-2 rounded-full transition-colors ${saved ? 'text-amber-400 bg-amber-50' : 'text-slate-300 hover:bg-slate-50'}`}
+                >
+                  <Star className="w-5 h-5 fill-current" />
+                </button>
               </div>
-              <button 
-                onClick={() => handleToggle(item)}
-                className={`p-2 rounded-full transition-colors ${saved ? 'text-amber-400 bg-amber-50' : 'text-slate-300 hover:bg-slate-50'}`}
-              >
-                <Star className="w-5 h-5 fill-current" />
-              </button>
+              
+              <div className="border-t border-slate-50 pt-3 mt-1 flex justify-between items-end">
+                <p className="text-slate-600 text-sm">{meaning}</p>
+                <button 
+                  onClick={() => handlePlay(mainText, idx)}
+                  className={`p-2 rounded-full transition-all ${playingIndex === idx ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-50 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}
+                >
+                  {playingIndex === idx ? <Loader2 className="w-5 h-5 animate-spin" /> : <Volume2 className="w-5 h-5" />}
+                </button>
+              </div>
             </div>
-            
-            <div className="border-t border-slate-50 pt-3 mt-1 flex justify-between items-end">
-              <p className="text-slate-600 text-sm">{meaning}</p>
-              <button 
-                onClick={() => handlePlay(mainText, idx)}
-                className={`p-2 rounded-full transition-all ${playingIndex === idx ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-50 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}
-              >
-                {playingIndex === idx ? <Loader2 className="w-5 h-5 animate-spin" /> : <Volume2 className="w-5 h-5" />}
-              </button>
-            </div>
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+
+      {onLoadMore && (
+        <div className="flex justify-center pb-8">
+            {canLoadMore ? (
+                <button 
+                    onClick={handleLoadMoreClick}
+                    disabled={isLoadingMore}
+                    className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-600 font-medium rounded-full shadow-sm hover:border-indigo-300 hover:text-indigo-600 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                    {isLoadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlusCircle className="w-4 h-4" />}
+                    {isLoadingMore ? t.loadingMore : t.loadMore}
+                </button>
+            ) : (
+                <div className="text-slate-400 text-sm font-medium bg-slate-100 px-4 py-2 rounded-full">
+                    {t.maxLoaded}
+                </div>
+            )}
+        </div>
+      )}
+    </>
   );
 };

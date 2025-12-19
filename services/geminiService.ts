@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { ScenarioContent, Language, ProgressCallback, VoiceEngine, VocabularyItem, DialogueSection, DialogueLine } from "../types";
+import { ScenarioContent, Language, ProgressCallback, VoiceEngine, VocabularyItem, DialogueSection, DialogueLine, ExpressionItem } from "../types";
 
 // Helper to safely get the API Key in both Vite (production) and AI Studio (preview) environments
 const getSystemApiKey = () => {
@@ -243,6 +243,101 @@ export const generateVocabularyAndExpressions = async (
     roles: { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' }
   };
 };
+
+// --- NEW FUNCTION: GENERATE MORE ITEMS ---
+export const generateMoreItems = async (
+  scenario: string,
+  type: 'vocab' | 'expression',
+  existingItems: string[],
+  language: Language = 'zh',
+  customApiKey?: string
+): Promise<(VocabularyItem | ExpressionItem)[]> => {
+  const ai = getAiInstance(customApiKey);
+  const langName = language === 'zh' ? 'Simplified Chinese' : 'English';
+  
+  const isVocab = type === 'vocab';
+  const label = isVocab ? 'vocabulary words' : 'common phrases/expressions';
+  const count = isVocab ? 10 : 5;
+  
+  // To keep prompt short, only send last 30 existing items if list is huge
+  const excludeList = existingItems.slice(-30).join('", "');
+
+  const prompt = `
+    Context: Japanese learning scenario "${scenario}".
+    Task: Generate ${count} NEW ${label} related to this scenario.
+    
+    CRITICAL CONSTRAINT: 
+    - DO NOT include these items already generated: "${excludeList}".
+    - Provide strictly unique, new items.
+    
+    Output strictly in JSON.
+  `;
+
+  // Define Schema based on type
+  const vocabSchema = {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        term: { type: Type.STRING },
+        kana: { type: Type.STRING },
+        romaji: { type: Type.STRING },
+        meaning: { 
+          type: Type.OBJECT, 
+          properties: {
+            en: { type: Type.STRING },
+            zh: { type: Type.STRING }
+          },
+          required: ["en", "zh"]
+        },
+        type: { type: Type.STRING }
+      }
+    }
+  };
+
+  const exprSchema = {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        phrase: { type: Type.STRING },
+        kana: { type: Type.STRING },
+        romaji: { type: Type.STRING },
+        meaning: { 
+          type: Type.OBJECT, 
+          properties: {
+            en: { type: Type.STRING },
+            zh: { type: Type.STRING }
+          },
+          required: ["en", "zh"]
+        },
+        nuance: { type: Type.STRING }
+      }
+    }
+  };
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: isVocab ? vocabSchema : exprSchema
+      }
+    });
+
+    if (response.text) {
+      const cleanText = cleanJsonText(response.text);
+      const result = JSON.parse(cleanText);
+      return Array.isArray(result) ? result : [];
+    }
+  } catch (e) {
+    console.error(`Generate more ${type} error`, e);
+  }
+
+  return [];
+};
+
 
 // INTERNAL HELPER: Generate a SINGLE scene with Retry & Timeout logic
 const generateSingleScene = async (

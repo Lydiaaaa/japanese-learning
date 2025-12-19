@@ -7,7 +7,7 @@ import { ScenariosListView } from './components/ScenariosListView';
 import { UserMenu } from './components/UserMenu';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine, DialogueSection } from './types';
-import { generateVocabularyAndExpressions, generateDialoguesWithCallback } from './services/geminiService';
+import { generateVocabularyAndExpressions, generateDialoguesWithCallback, generateMoreItems } from './services/geminiService';
 import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario, User, checkDailyQuota, incrementDailyQuota, checkIsAdmin } from './services/firebase';
 import { Loader2, AlertCircle, RefreshCw, Globe, Star, Settings, Type, Zap, Key } from 'lucide-react';
 import { UI_TEXT } from './constants';
@@ -264,6 +264,66 @@ export default function App() {
       setCurrentVersions(updatedVersions);
       setCurrentVersionIndex(0);
       setCurrentContent(updatedVersions[0]);
+    }
+  };
+
+  // --- NEW: Handle Load More Items ---
+  const handleLoadMoreItems = async (type: 'vocab' | 'expression') => {
+    if (!currentContent) return;
+
+    try {
+      // 1. Gather existing terms for de-duplication
+      let existingTerms: string[] = [];
+      if (type === 'vocab') {
+         existingTerms = currentContent.vocabulary.map(v => v.term);
+      } else {
+         existingTerms = currentContent.expressions.map(e => e.phrase);
+      }
+
+      // 2. Call Service
+      const newItems = await generateMoreItems(
+        currentContent.scenarioName,
+        type,
+        existingTerms,
+        language,
+        customApiKey || undefined
+      );
+
+      // 3. Update State if we got results
+      if (newItems && newItems.length > 0) {
+        const updatedContent = { ...currentContent };
+        
+        if (type === 'vocab') {
+           updatedContent.vocabulary = [...updatedContent.vocabulary, ...newItems as any];
+        } else {
+           updatedContent.expressions = [...updatedContent.expressions, ...newItems as any];
+        }
+
+        // Update current view
+        setCurrentContent(updatedContent);
+
+        // Update history / versions
+        setCurrentVersions(prev => {
+          const updated = [...prev];
+          updated[currentVersionIndex] = updatedContent;
+          return updated;
+        });
+
+        setScenarioHistory(prev => {
+           return prev.map(item => {
+              if (item.id === currentContent.scenarioName) {
+                 const newVersions = [...item.versions];
+                 newVersions[currentVersionIndex] = updatedContent;
+                 return { ...item, versions: newVersions };
+              }
+              return item;
+           });
+        });
+      }
+
+    } catch (e) {
+      console.error("Failed to load more items", e);
+      alert(t.errorDesc);
     }
   };
 
@@ -741,6 +801,7 @@ export default function App() {
             notation={notation}
             voiceEngine={voiceEngine}
             isGeneratingDialogues={isGeneratingDialogues}
+            onLoadMoreItems={handleLoadMoreItems}
           />
         )}
 

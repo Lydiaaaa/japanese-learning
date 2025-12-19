@@ -21,6 +21,7 @@ interface StudyViewProps {
   notation: Notation;
   voiceEngine: VoiceEngine;
   isGeneratingDialogues?: boolean;
+  onLoadMoreItems?: (type: 'vocab' | 'expression') => Promise<void>;
 }
 
 type Tab = 'vocab' | 'expressions' | 'dialogue';
@@ -43,10 +44,21 @@ export const StudyView: React.FC<StudyViewProps> = ({
   onDeleteVersion,
   notation,
   voiceEngine,
-  isGeneratingDialogues
+  isGeneratingDialogues,
+  onLoadMoreItems
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('vocab');
   const scrollContainerRef = useRef<HTMLDivElement>(null); 
+  
+  // Track load counts per version
+  const [vocabLoadCount, setVocabLoadCount] = useState(0);
+  const [expressionLoadCount, setExpressionLoadCount] = useState(0);
+  
+  // Reset counts when version changes
+  useEffect(() => {
+    setVocabLoadCount(0);
+    setExpressionLoadCount(0);
+  }, [currentVersionIndex, content.scenarioName]);
   
   // Share State
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -80,6 +92,21 @@ export const StudyView: React.FC<StudyViewProps> = ({
       month: 'short',
       day: 'numeric'
     });
+  };
+
+  const handleLoadMore = async (type: 'vocab' | 'expression') => {
+      if (!onLoadMoreItems) return;
+      
+      try {
+          await onLoadMoreItems(type);
+          if (type === 'vocab') {
+              setVocabLoadCount(prev => prev + 1);
+          } else {
+              setExpressionLoadCount(prev => prev + 1);
+          }
+      } catch (e) {
+          console.error(e);
+      }
   };
 
   const handleCopyLink = async () => {
@@ -367,6 +394,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
               language={language}
               voiceEngine={voiceEngine}
               onRetry={onRegenerate}
+              onLoadMore={() => handleLoadMore('vocab')}
+              canLoadMore={vocabLoadCount < 2}
             />
           )}
           
@@ -380,6 +409,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
               language={language}
               voiceEngine={voiceEngine}
               onRetry={onRegenerate}
+              onLoadMore={() => handleLoadMore('expression')}
+              canLoadMore={expressionLoadCount < 2}
             />
           )}
 
