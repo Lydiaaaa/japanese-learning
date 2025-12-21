@@ -227,7 +227,8 @@ export const generateVocabularyAndExpressions = async (
         contents: vocabPrompt,
         config: {
           responseMimeType: "application/json",
-          responseSchema: vocabSchema
+          responseSchema: vocabSchema,
+          thinkingConfig: { thinkingBudget: 0 }
         }
       }),
       ai.models.generateContent({
@@ -235,7 +236,8 @@ export const generateVocabularyAndExpressions = async (
         contents: expressionPrompt,
         config: {
           responseMimeType: "application/json",
-          responseSchema: expressionSchema
+          responseSchema: expressionSchema,
+          thinkingConfig: { thinkingBudget: 0 }
         }
       })
     ]);
@@ -355,7 +357,8 @@ export const regenerateSection = async (
       contents: prompt,
       config: {
         responseMimeType: "application/json",
-        responseSchema: isVocab ? vocabSchema : exprSchema
+        responseSchema: isVocab ? vocabSchema : exprSchema,
+        thinkingConfig: { thinkingBudget: 0 }
       }
     });
 
@@ -448,7 +451,8 @@ export const generateMoreItems = async (
       contents: prompt,
       config: {
         responseMimeType: "application/json",
-        responseSchema: isVocab ? vocabSchema : exprSchema
+        responseSchema: isVocab ? vocabSchema : exprSchema,
+        thinkingConfig: { thinkingBudget: 0 }
       }
     });
 
@@ -542,6 +546,7 @@ const generateSingleScene = async (
       contents: prompt,
       config: {
         responseMimeType: "application/json",
+        thinkingConfig: { thinkingBudget: 0 }
       }
     });
 
@@ -618,7 +623,8 @@ const generateSingleScene = async (
   } catch (error) {
     console.warn(`Scene ${sceneIndex} attempt ${attempt} failed:`, error);
     if (attempt < 2) {
-      // Retry once
+      // Retry once with backoff
+      await new Promise(r => setTimeout(r, 2000));
       return generateSingleScene(scenario, sceneIndex, sceneType, contextVocab, roles, language, customApiKey, attempt + 1, customPrompt);
     }
     
