@@ -3,6 +3,18 @@ import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ScenarioContent, Language, LearningLanguage, ProgressCallback, VoiceEngine, VocabularyItem, DialogueSection, DialogueLine, ExpressionItem } from "../types";
 import { LEARNING_LANGUAGES } from "../constants";
 
+// Helper to get API Key safely
+const getApiKey = (): string => {
+  // Priority: Environment Variable -> Local Storage -> Throw
+  const envKey = process.env.API_KEY;
+  if (envKey && envKey.length > 0) return envKey;
+  
+  const localKey = localStorage.getItem('nihongo_api_key');
+  if (localKey) return localKey;
+  
+  throw new Error("API Key is missing. Please set it in the settings.");
+};
+
 // Manual decoding helper as per Gemini API guidelines for raw PCM data
 function decode(base64: string) {
   const binaryString = atob(base64);
@@ -94,24 +106,24 @@ export const generateVocabularyAndExpressions = async (
   targetLang: LearningLanguage = 'ja',
   uiLang: Language = 'zh'
 ): Promise<Partial<ScenarioContent> & { roles?: { user: string, partner: string } }> => {
-  // Use process.env.API_KEY directly as per guidelines
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   const targetLangName = LEARNING_LANGUAGES.find(l => l.id === targetLang)?.name.en || 'Japanese';
   const uiLangName = uiLang === 'zh' ? 'Simplified Chinese' : 'English';
 
   const vocabPrompt = `
     Analyze the scenario: "${scenario}" in the context of learning ${targetLangName}.
     
-    Task 1: Define two specific roles for a conversation.
-    - userRole: The learner (e.g., "International Student", "Tourist"). Name MUST be in ${uiLangName}.
-    - partnerRole: The person they are talking to. Name MUST be in ${uiLangName}.
+    Task 1: Define two specific roles.
+    - userRole: The learner. Name in ${uiLangName}.
+    - partnerRole: The partner. Name in ${uiLangName}.
     
-    Task 2: Create a ${targetLangName} language study list of 12-15 essential Vocabulary words.
-    - IMPORTANT: Include phonetic reading (like Pinyin for Chinese, Romaji for Japanese) in the 'romaji' field.
+    Task 2: Create a study list of 12-15 essential Vocabulary words.
+    - Include phonetic reading (like Pinyin/Romaji).
     
     Output strictly in JSON.
   `;
 
+  // STRICT SCHEMA: All properties must be required for Gemini 1.5/3.0
   const vocabSchema = {
     type: Type.OBJECT,
     properties: {
@@ -129,18 +141,20 @@ export const generateVocabularyAndExpressions = async (
           type: Type.OBJECT,
           properties: {
             term: { type: Type.STRING },
-            kana: { type: Type.STRING, description: "Phonetic script like Kana or Pinyin" },
-            romaji: { type: Type.STRING, description: "Romanized reading" },
+            kana: { type: Type.STRING, description: "Phonetic script or empty string" },
+            romaji: { type: Type.STRING, description: "Romanized reading or empty string" },
             meaning: { 
               type: Type.OBJECT, 
               properties: { en: { type: Type.STRING }, zh: { type: Type.STRING } },
               required: ["en", "zh"]
             },
             type: { type: Type.STRING }
-          }
+          },
+          required: ["term", "kana", "romaji", "meaning", "type"]
         }
       }
-    }
+    },
+    required: ["setup", "vocabulary"]
   };
 
   const expressionPrompt = `
@@ -158,18 +172,20 @@ export const generateVocabularyAndExpressions = async (
           type: Type.OBJECT,
           properties: {
             phrase: { type: Type.STRING },
-            kana: { type: Type.STRING },
-            romaji: { type: Type.STRING },
+            kana: { type: Type.STRING, description: "Phonetic script or empty string" },
+            romaji: { type: Type.STRING, description: "Romanized reading or empty string" },
             meaning: { 
               type: Type.OBJECT, 
               properties: { en: { type: Type.STRING }, zh: { type: Type.STRING } },
               required: ["en", "zh"]
             },
-            nuance: { type: Type.STRING }
-          }
+            nuance: { type: Type.STRING, description: "Usage nuance or empty string" }
+          },
+          required: ["phrase", "kana", "romaji", "meaning", "nuance"]
         }
       }
-    }
+    },
+    required: ["expressions"]
   };
 
   try {
@@ -177,12 +193,20 @@ export const generateVocabularyAndExpressions = async (
       ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: vocabPrompt,
-        config: { responseMimeType: "application/json", responseSchema: vocabSchema }
+        config: { 
+            responseMimeType: "application/json", 
+            responseSchema: vocabSchema,
+            thinkingConfig: { thinkingBudget: 0 } // COST SAVING: Disable thinking
+        }
       }),
       ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: expressionPrompt,
-        config: { responseMimeType: "application/json", responseSchema: expressionSchema }
+        config: { 
+            responseMimeType: "application/json", 
+            responseSchema: expressionSchema,
+            thinkingConfig: { thinkingBudget: 0 } // COST SAVING: Disable thinking
+        }
       })
     ]);
 
@@ -200,8 +224,8 @@ export const generateVocabularyAndExpressions = async (
       roles: vocabData.setup ? { user: vocabData.setup.userRole, partner: vocabData.setup.partnerRole } : undefined
     };
   } catch (e) {
-    console.error(e);
-    return { scenarioName: scenario, targetLanguage: targetLang, vocabulary: [], expressions: [], dialogues: [] };
+    console.error("Gemini API Error:", e);
+    throw new Error("Failed to generate vocabulary. Please check your API Key.");
   }
 };
 
@@ -211,7 +235,7 @@ export const regenerateSection = async (
   type: 'vocab' | 'expression',
   uiLang: Language = 'zh'
 ): Promise<(VocabularyItem | ExpressionItem)[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   const targetLangName = LEARNING_LANGUAGES.find(l => l.id === targetLang)?.name.en || 'Japanese';
   
   const isVocab = type === 'vocab';
@@ -222,7 +246,10 @@ export const regenerateSection = async (
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: { responseMimeType: "application/json" }
+      config: { 
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingBudget: 0 } // COST SAVING
+      }
     });
     if (response.text) {
       const result = JSON.parse(cleanJsonText(response.text));
@@ -238,14 +265,17 @@ export const generateMoreItems = async (
   type: 'vocab' | 'expression',
   existingItems: string[]
 ): Promise<(VocabularyItem | ExpressionItem)[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   const targetLangName = LEARNING_LANGUAGES.find(l => l.id === targetLang)?.name.en || 'Japanese';
   const prompt = `Learning ${targetLangName} scenario: "${scenario}". Generate more items, excluding: ${existingItems.slice(-20).join(', ')}. JSON.`;
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: { responseMimeType: "application/json" }
+      config: { 
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingBudget: 0 } // COST SAVING
+      }
     });
     if (response.text) {
       const result = JSON.parse(cleanJsonText(response.text));
@@ -266,7 +296,7 @@ const generateSingleScene = async (
   attempt: number = 1,
   customPrompt?: string
 ): Promise<DialogueSection> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   const targetLangName = LEARNING_LANGUAGES.find(l => l.id === targetLang)?.name.en || 'Japanese';
   const uiLangName = uiLang === 'zh' ? 'Simplified Chinese' : 'English';
 
@@ -282,16 +312,48 @@ const generateSingleScene = async (
     - Language: Use natural, spoken ${targetLangName}.
     - Include Phonetic readings (Romaji/Pinyin) for ALL lines in 'romaji' and 'kana' fields.
     - Provide translations in English and ${uiLangName}.
+    - Length: Strictly 4-6 exchanges (8-12 lines total). Keep it concise.
     
-    Output JSON:
-    { "title": "...", "lines": [ { "speaker": "A", "roleName": "...", "japanese": "...", "kana": "...", "romaji": "...", "translation": { "en": "...", "zh": "..." } } ] }
+    Output JSON.
   `;
+
+  // Define Schema for dialogue to prevent parsing errors
+  const dialogueSchema = {
+    type: Type.OBJECT,
+    properties: {
+      title: { type: Type.STRING },
+      lines: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            speaker: { type: Type.STRING },
+            roleName: { type: Type.STRING },
+            japanese: { type: Type.STRING },
+            kana: { type: Type.STRING, description: "Phonetic or empty" },
+            romaji: { type: Type.STRING, description: "Romanized or empty" },
+            translation: {
+              type: Type.OBJECT,
+              properties: { en: { type: Type.STRING }, zh: { type: Type.STRING } },
+              required: ["en", "zh"]
+            }
+          },
+          required: ["speaker", "roleName", "japanese", "kana", "romaji", "translation"]
+        }
+      }
+    },
+    required: ["title", "lines"]
+  };
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: { responseMimeType: "application/json" }
+      config: { 
+        responseMimeType: "application/json",
+        responseSchema: dialogueSchema,
+        thinkingConfig: { thinkingBudget: 0 } // COST SAVING: Disable thinking budget for simple content generation
+      }
     });
 
     if (response.text) {
@@ -311,6 +373,7 @@ const generateSingleScene = async (
     }
     throw new Error("Empty response");
   } catch (error) {
+    console.error("Scene Gen Error:", error);
     if (attempt < 2) return generateSingleScene(scenario, targetLang, sceneIndex, sceneType, contextVocab, roles, uiLang, attempt + 1, customPrompt);
     return { title: `Scene ${sceneIndex}`, lines: [] };
   }
@@ -358,7 +421,7 @@ export const generateCustomScene = async (
 // --- AUDIO FUNCTIONS ---
 
 export const getAudioBuffer = async (text: string, voiceName: string): Promise<AudioBuffer> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   const ctx = getAudioContext();
   const cacheKey = `${voiceName}-${text}`;
   if (audioCache.has(cacheKey)) return audioCache.get(cacheKey)!;
@@ -429,6 +492,7 @@ export const playTTS = async (
     source.connect(ctx.destination);
     source.start();
   } catch (err) {
+    console.error("AI TTS failed, falling back to system", err);
     playSystemTTS(text, langCode);
   }
 };

@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface Props {
@@ -13,27 +13,24 @@ interface State {
 
 /**
  * ErrorBoundary component to catch rendering errors in the component tree.
- * Fixed: Explicitly extends Component to ensure 'props' and 'setState' are correctly typed and available.
  */
-export class ErrorBoundary extends Component<Props, State> {
+export class ErrorBoundary extends React.Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
     errorInfo: null
   };
 
-  static getDerivedStateFromError(error: Error): Partial<State> {
+  public static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error, errorInfo: null };
   }
 
-  // Update errorInfo in state when an error is caught during rendering
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
-    // Properly call the base class setState method
     this.setState({ errorInfo });
   }
 
-  render() {
+  public render() {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
@@ -67,7 +64,6 @@ export class ErrorBoundary extends Component<Props, State> {
       );
     }
 
-    // children is accessible via this.props when extending Component
     return this.props.children;
   }
 }

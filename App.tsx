@@ -5,10 +5,11 @@ import { StudyView } from './components/StudyView';
 import { FavoritesView } from './components/FavoritesView';
 import { ScenariosListView } from './components/ScenariosListView';
 import { UserMenu } from './components/UserMenu';
+import { ApiKeyModal } from './components/ApiKeyModal';
 import { ViewState, ScenarioContent, Language, LearningLanguage, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine, DialogueSection } from './types';
 import { generateVocabularyAndExpressions, generateDialoguesWithCallback, generateMoreItems, regenerateSection, regenerateSingleDialogue, generateCustomScene } from './services/geminiService';
 import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario, User, checkIsAdmin } from './services/firebase';
-import { Loader2, Globe, Star, Settings, Type, Zap, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Loader2, Globe, Star, Settings, Type, Zap, AlertTriangle, RefreshCw, Key } from 'lucide-react';
 import { UI_TEXT, LEARNING_LANGUAGES } from './constants';
 import { SaynarioLogo } from './components/Logo';
 
@@ -37,6 +38,7 @@ export default function App() {
   const [language, setLanguage] = useState<Language>(getInitialLanguage());
   const [targetLanguage, setTargetLanguage] = useState<LearningLanguage>(getInitialTargetLanguage());
   const [notation, setNotation] = useState<Notation>('kana');
+  // Default to system voice to save costs for user
   const [voiceEngine, setVoiceEngine] = useState<VoiceEngine>('system');
   
   const [user, setUser] = useState<User | null>(null);
@@ -44,6 +46,7 @@ export default function App() {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
 
   const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
   const [scenarioHistory, setScenarioHistory] = useState<ScenarioHistoryItem[]>([]);
@@ -73,6 +76,11 @@ export default function App() {
       if (savedNotation) setNotation(savedNotation as Notation);
       const savedEngine = localStorage.getItem('nihongo_voice_engine');
       if (savedEngine) setVoiceEngine(savedEngine as VoiceEngine);
+      
+      // Check API Key
+      if (!process.env.API_KEY && !localStorage.getItem('nihongo_api_key')) {
+         setShowApiKeyModal(true);
+      }
     } catch (e) { console.error(e); }
   }, []);
 
@@ -135,6 +143,12 @@ export default function App() {
 
   // Handle Scenario Generation without manual API key management
   const executeScenarioGeneration = async (scenarioName: string) => {
+    // Check key before starting
+    if (!process.env.API_KEY && !localStorage.getItem('nihongo_api_key')) {
+        setShowApiKeyModal(true);
+        return;
+    }
+
     setViewState(ViewState.GENERATING);
     setLoadingStep(0); 
     setIsGeneratingDialogues(false);
@@ -177,9 +191,9 @@ export default function App() {
         },
         language
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setErrorMsg(t.errorDesc);
+      setErrorMsg(err.message || t.errorDesc);
       setViewState(ViewState.ERROR);
     } finally { setIsGeneratingDialogues(false); }
   };
@@ -229,6 +243,17 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 text-slate-900 font-sans overflow-hidden">
+      <ApiKeyModal 
+        isOpen={showApiKeyModal} 
+        onClose={() => setShowApiKeyModal(false)}
+        language={language}
+        isQuotaExceeded={false}
+        onConfirm={(key) => {
+            if (key) localStorage.setItem('nihongo_api_key', key);
+            setShowApiKeyModal(false);
+        }}
+      />
+
       <nav className="bg-white border-b border-slate-100 px-4 md:px-6 py-4 flex justify-between items-center z-10 shadow-sm flex-shrink-0">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setViewState(ViewState.HOME)}>
@@ -258,6 +283,12 @@ export default function App() {
                       <span className="text-sm">UI Language</span>
                     </div>
                     <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded">{language === 'zh' ? 'CN' : 'EN'}</span>
+                  </button>
+                  <button onClick={() => { setShowApiKeyModal(true); setIsSettingsOpen(false); }} className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between group">
+                    <div className="flex items-center gap-3 text-slate-700">
+                      <Key className="w-4 h-4 text-slate-400 group-hover:text-indigo-600" />
+                      <span className="text-sm">API Key</span>
+                    </div>
                   </button>
                   <button onClick={() => { setNotation(n => n === 'kana' ? 'romaji' : 'kana'); setIsSettingsOpen(false); }} className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between group">
                     <div className="flex items-center gap-3 text-slate-700">
@@ -369,7 +400,13 @@ export default function App() {
                 {t.goHome}
               </button>
               <button 
-                onClick={() => executeScenarioGeneration(loadingScenarioName)}
+                onClick={() => {
+                  if (!process.env.API_KEY && !localStorage.getItem('nihongo_api_key')) {
+                    setShowApiKeyModal(true);
+                  } else {
+                    executeScenarioGeneration(loadingScenarioName);
+                  }
+                }}
                 className="px-6 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
