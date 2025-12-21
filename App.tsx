@@ -298,6 +298,7 @@ export default function App() {
             onToggleSave={item => setSavedItems(prev => prev.filter(i => !(i.id === item.id && i.type === item.type)))}
             notation={notation}
             voiceEngine={voiceEngine}
+            targetLanguage={targetLanguage}
           />
         )}
         {viewState === ViewState.HISTORY && (
