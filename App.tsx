@@ -62,6 +62,7 @@ export default function App() {
     root.style.setProperty('--primary-color', activeTargetLang.theme);
   }, [targetLanguage, activeTargetLang]);
 
+  // Initial Load from LocalStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem('nihongo_favorites');
@@ -73,6 +74,39 @@ export default function App() {
       const savedEngine = localStorage.getItem('nihongo_voice_engine');
       if (savedEngine) setVoiceEngine(savedEngine as VoiceEngine);
     } catch (e) { console.error(e); }
+  }, []);
+
+  // Auth Subscription & Sync Logic (FIXED: This was missing)
+  useEffect(() => {
+    const unsubscribe = subscribeToAuth(async (authUser) => {
+      setUser(authUser);
+      
+      // If user is logged in, try to sync local data with cloud
+      if (authUser && authUser.uid !== GUEST_ID) {
+        try {
+            // Read directly from localStorage to ensure we have the latest data before sync
+            // (State variables might be empty on initial mount)
+            const localFavs = JSON.parse(localStorage.getItem('nihongo_favorites') || '[]');
+            const localHist = JSON.parse(localStorage.getItem('nihongo_scenarios') || '[]');
+            
+            const merged = await syncUserData(authUser.uid, { 
+                favorites: localFavs, 
+                history: localHist 
+            });
+            
+            if (merged) {
+                setSavedItems(merged.favorites);
+                setScenarioHistory(merged.history);
+            }
+        } catch (e) {
+            console.error("Sync failed:", e);
+        }
+      }
+      
+      // Crucial: Turn off loading state
+      setIsSyncing(false);
+    });
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
