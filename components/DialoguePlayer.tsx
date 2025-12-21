@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { DialogueSection, Language, Notation, VoiceEngine } from '../types';
-import { Play, Pause, Mic, Volume2, MessageSquare, Download, Loader2, RefreshCw, PenTool, Plus } from 'lucide-react';
+import { Play, Mic, Volume2, MessageSquare, Download, Loader2, RefreshCw, PenTool, Plus } from 'lucide-react';
 import { playTTS, generateDialogueAudioWithProgress } from '../services/geminiService';
 import { UI_TEXT } from '../constants';
 
@@ -57,26 +57,14 @@ export const DialoguePlayer: React.FC<Props> = ({
   // Auto-scroll logic
   useEffect(() => {
     if (contentTopRef.current) {
-        // Try to find the scrollable parent container in StudyView
         const scrollableParent = contentTopRef.current.closest('.overflow-y-auto');
         if (scrollableParent) {
             scrollableParent.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
-            // Fallback
             contentTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
   }, [activeSectionIdx, isAddingSceneMode]);
-
-  // When sections length increases (new scene added), select the new scene
-  useEffect(() => {
-     if (sections && sections.length > 0) {
-         // If we were adding a scene, and now sections count increased, select the last one
-         // Note: We need a way to know if this is a NEW scene or just initial load.
-         // A simple heuristic: if isCreatingScene becomes false and length > prevLength.
-         // For simplicity, we just check if the last section is populated and we were in adding mode.
-     }
-  }, [sections.length]);
 
   const handlePlayLine = async (sectionIdx: number, lineIdx: number, text: string, speaker: string) => {
     if (playingLine?.sectionIdx === sectionIdx && playingLine?.lineIdx === lineIdx) {
@@ -86,9 +74,8 @@ export const DialoguePlayer: React.FC<Props> = ({
     setPlayingLine({ sectionIdx, lineIdx });
     try {
       const voice = speaker === 'A' ? 'Puck' : 'Kore';
-      // Get API Key from localStorage for TTS if available
-      const customKey = localStorage.getItem('nihongo_api_key') || undefined;
-      await playTTS(text, voice, voiceEngine as VoiceEngine, customKey);
+      // Gemini API instance will use process.env.API_KEY automatically
+      await playTTS(text, voice, voiceEngine as VoiceEngine);
     } catch (error) {
       console.error("Audio Playback Error", error);
     } finally {
@@ -98,7 +85,6 @@ export const DialoguePlayer: React.FC<Props> = ({
 
   const handleDownloadAudio = async () => {
     const section = sections[activeSectionIdx];
-    // Safeguard against missing lines
     if (!section || !section.lines || !Array.isArray(section.lines) || isDownloadingAudio) return;
 
     setIsDownloadingAudio(true);
@@ -110,16 +96,12 @@ export const DialoguePlayer: React.FC<Props> = ({
             speaker: line.speaker
         }));
         
-        // Get API Key from localStorage for TTS if available
-        const customKey = localStorage.getItem('nihongo_api_key') || undefined;
-
         const wavBlob = await generateDialogueAudioWithProgress(
           linesToProcess,
           (completed, total) => {
              const pct = Math.round((completed / total) * 100);
              setDownloadProgress(`${pct}%`);
-          },
-          customKey
+          }
         );
         
         const url = URL.createObjectURL(wavBlob);
@@ -161,7 +143,6 @@ export const DialoguePlayer: React.FC<Props> = ({
           await onAddScene(newScenePrompt.trim());
           setNewScenePrompt('');
           setIsAddingSceneMode(false);
-          // Select the new scene (it's the last one now)
           setActiveSectionIdx(sections.length); 
       } catch (err) {
           console.error(err);
@@ -212,10 +193,8 @@ export const DialoguePlayer: React.FC<Props> = ({
     }
   };
 
-  // Helper to check if ANY content exists
   const hasAnyContent = sections && sections.some(s => !!s);
   
-  // If absolutely nothing exists and we are NOT generating, show empty state
   if (!hasAnyContent && !isGenerating) {
     return (
       <div className="flex flex-col items-center justify-center h-64 bg-slate-50 rounded-2xl border border-slate-100 border-dashed text-slate-400 p-8">
@@ -235,7 +214,6 @@ export const DialoguePlayer: React.FC<Props> = ({
 
   const activeSection = sections[activeSectionIdx];
   
-  // Determine if this specific section is loading.
   const isSectionLoading = 
     !activeSection || 
     retryingSceneIdx === activeSectionIdx || 
@@ -243,7 +221,6 @@ export const DialoguePlayer: React.FC<Props> = ({
 
   return (
     <div className="flex flex-col md:flex-row gap-6 h-full items-start">
-      {/* Sidebar Navigation */}
       <div className="md:w-64 flex-shrink-0 flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-2 md:pb-0 no-scrollbar md:sticky md:top-6 self-start z-10">
         {sections.map((sec, idx) => {
           const isActive = idx === activeSectionIdx && !isAddingSceneMode;
@@ -280,7 +257,6 @@ export const DialoguePlayer: React.FC<Props> = ({
           );
         })}
 
-        {/* Add Scene Button */}
         {onAddScene && sections.length < MAX_SCENES && !isGenerating && (
             <button
                 onClick={() => setIsAddingSceneMode(true)}
@@ -297,11 +273,9 @@ export const DialoguePlayer: React.FC<Props> = ({
         )}
       </div>
 
-      {/* Main Content Area */}
       <div ref={contentTopRef} className="flex-1 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col min-h-[500px] w-full">
         
         {isAddingSceneMode ? (
-            // New Scene Creation Form
             <div className="flex flex-col items-center justify-center h-full p-8 text-center flex-1 animate-in fade-in zoom-in-95 duration-300">
                 <div className="w-full max-w-md">
                     <div className="bg-indigo-50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-6">
@@ -345,7 +319,6 @@ export const DialoguePlayer: React.FC<Props> = ({
                 </div>
             </div>
         ) : isSectionLoading ? (
-           // Skeleton for Active Loading Section
            <div className="flex flex-col items-center justify-center h-full p-8 text-center flex-1 animate-in fade-in zoom-in-95 duration-500">
               <div className="relative mb-6">
                  <div className="absolute inset-0 bg-indigo-200 rounded-full blur-xl opacity-40 animate-pulse"></div>
@@ -359,7 +332,6 @@ export const DialoguePlayer: React.FC<Props> = ({
               </p>
            </div>
         ) : (
-           // Loaded Content
            <>
             <div className="p-4 md:p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/50 rounded-t-2xl">
               <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
@@ -370,7 +342,6 @@ export const DialoguePlayer: React.FC<Props> = ({
               </h3>
               <button 
                  onClick={handleDownloadAudio}
-                 // Disable if downloading OR lines are missing/empty
                  disabled={isDownloadingAudio || !activeSection.lines || activeSection.lines.length === 0}
                  className="flex items-center gap-2 text-xs font-medium bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px] justify-center"
               >
@@ -380,7 +351,6 @@ export const DialoguePlayer: React.FC<Props> = ({
             </div>
 
             <div className="p-4 md:p-6 space-y-6">
-              {/* Defensive Check: Ensure lines exist and are an array */}
               {activeSection.lines && Array.isArray(activeSection.lines) && activeSection.lines.length > 0 ? (
                   activeSection.lines.map((line, lIdx) => {
                     const isPlaying = playingLine?.sectionIdx === activeSectionIdx && playingLine?.lineIdx === lIdx;

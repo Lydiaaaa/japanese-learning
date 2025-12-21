@@ -1,79 +1,60 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { ScenarioContent, Language, ProgressCallback, VoiceEngine, VocabularyItem, DialogueSection, DialogueLine, ExpressionItem } from "../types";
+import { ScenarioContent, Language, LearningLanguage, ProgressCallback, VoiceEngine, VocabularyItem, DialogueSection, DialogueLine, ExpressionItem } from "../types";
+import { LEARNING_LANGUAGES } from "../constants";
 
-// Helper to safely get the API Key in both Vite (production) and AI Studio (preview) environments
-const getSystemApiKey = () => {
-  // 1. Check Vite environment variable
-  // @ts-ignore
-  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
-    // @ts-ignore
-    return import.meta.env.VITE_API_KEY;
-  }
-  
-  // 2. Check process.env safely (Prevents "process is not defined" error in browsers)
-  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-    return process.env.API_KEY;
-  }
-
-  return undefined;
-};
-
-// ---------------------------------------------------------------------------
-// AUDIO SYSTEM OPTIMIZATIONS
-// ---------------------------------------------------------------------------
-
-// 1. Singleton AudioContext (prevents cold-start latency)
-let audioContext: AudioContext | null = null;
-
-// 2. In-Memory Audio Cache (key: "VoiceName-Text" -> AudioBuffer)
-const audioCache = new Map<string, AudioBuffer>();
-
-function getAudioContext(): AudioContext {
-  if (!audioContext) {
-    const AudioContextStr = window.AudioContext || (window as any).webkitAudioContext;
-    // Gemini TTS is 24kHz
-    audioContext = new AudioContextStr({ sampleRate: 24000 });
-  }
-  // Always resume if suspended (browser autoplay policy)
-  if (audioContext.state === 'suspended') {
-    audioContext.resume();
-  }
-  return audioContext;
-}
-
-// Helper: Convert Base64 PCM (Int16) to Float32Audio
-function processAudioChunk(base64: string): Float32Array {
+// Manual decoding helper as per Gemini API guidelines for raw PCM data
+function decode(base64: string) {
   const binaryString = atob(base64);
   const len = binaryString.length;
   const bytes = new Uint8Array(len);
   for (let i = 0; i < len; i++) {
     bytes[i] = binaryString.charCodeAt(i);
   }
-  const dataInt16 = new Int16Array(bytes.buffer);
-  const float32Data = new Float32Array(dataInt16.length);
-  for (let i = 0; i < dataInt16.length; i++) {
-    // Normalize Int16 to Float32 [-1.0, 1.0]
-    float32Data[i] = dataInt16[i] / 32768.0;
-  }
-  return float32Data;
+  return bytes;
 }
 
-// Helper to get AI instance with dynamic key
-const getAiInstance = (customKey?: string) => {
-  const key = customKey || getSystemApiKey();
-  if (!key) throw new Error("API Key is missing! Please check your configuration.");
-  return new GoogleGenAI({ apiKey: key });
-};
+// Manual audio buffer creation from raw PCM bytes
+async function decodeAudioData(
+  data: Uint8Array,
+  ctx: AudioContext,
+  sampleRate: number,
+  numChannels: number,
+): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return buffer;
+}
 
 // ---------------------------------------------------------------------------
-// ROBUST PARSING HELPERS
+// AUDIO SYSTEM CONFIGURATION
 // ---------------------------------------------------------------------------
 
-// 1. Clean Markdown from JSON string
+let audioContext: AudioContext | null = null;
+const audioCache = new Map<string, AudioBuffer>();
+
+function getAudioContext(): AudioContext {
+  if (!audioContext) {
+    const AudioContextStr = window.AudioContext || (window as any).webkitAudioContext;
+    audioContext = new AudioContextStr({ sampleRate: 24000 });
+  }
+  if (audioContext.state === 'suspended') {
+    audioContext.resume();
+  }
+  return audioContext;
+}
+
+// Clean JSON text returned by the model if wrapped in markdown code blocks
 const cleanJsonText = (text: string): string => {
   let cleaned = text.trim();
-  // Remove markdown code blocks if present
   if (cleaned.includes('```')) {
      const match = cleaned.match(/```(?:json)?([\s\S]*?)```/);
      if (match && match[1]) {
@@ -83,71 +64,50 @@ const cleanJsonText = (text: string): string => {
   return cleaned;
 };
 
-// 2. Recursively find an array that looks like dialogue lines
+// Response data extractors
 const findDialogueLines = (obj: any): any[] | null => {
   if (!obj || typeof obj !== 'object') return null;
-
-  // If the object itself is an array, check if it looks like lines
   if (Array.isArray(obj)) {
-    if (obj.length > 0 && (obj[0].speaker || obj[0].japanese || obj[0].text)) {
-      return obj;
-    }
+    if (obj.length > 0 && (obj[0].speaker || obj[0].japanese || obj[0].text)) return obj;
     return null; 
   }
-
-  // Check common keys first
   if (Array.isArray(obj.lines)) return obj.lines;
   if (Array.isArray(obj.dialogue)) return obj.dialogue;
-  if (Array.isArray(obj.script)) return obj.script;
-  if (Array.isArray(obj.conversation)) return obj.conversation;
-
-  // Deep search
   for (const key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      const result = findDialogueLines(obj[key]);
-      if (result) return result;
-    }
+    const result = findDialogueLines(obj[key]);
+    if (result) return result;
   }
-
   return null;
 };
 
-// 3. Find title recursively
 const findTitle = (obj: any, defaultTitle: string): string => {
   if (!obj || typeof obj !== 'object') return defaultTitle;
   if (typeof obj.title === 'string') return obj.title;
   if (typeof obj.sceneName === 'string') return obj.sceneName;
-  
-  // Shallow check next level
-  for (const key in obj) {
-    if (obj[key] && typeof obj[key] === 'object' && typeof obj[key].title === 'string') {
-      return obj[key].title;
-    }
-  }
   return defaultTitle;
 };
 
-// --- NEW SPLIT GENERATION FUNCTIONS ---
+// --- SCENARIO GENERATION ---
 
-// STEP 1: Generate Vocabulary, Expressions AND ROLES (FAST)
 export const generateVocabularyAndExpressions = async (
   scenario: string, 
-  language: Language = 'zh', 
-  customApiKey?: string
+  targetLang: LearningLanguage = 'ja',
+  uiLang: Language = 'zh'
 ): Promise<Partial<ScenarioContent> & { roles?: { user: string, partner: string } }> => {
-  const ai = getAiInstance(customApiKey);
-  const langName = language === 'zh' ? 'Simplified Chinese' : 'English';
+  // Use process.env.API_KEY directly as per guidelines
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const targetLangName = LEARNING_LANGUAGES.find(l => l.id === targetLang)?.name.en || 'Japanese';
+  const uiLangName = uiLang === 'zh' ? 'Simplified Chinese' : 'English';
 
-  // --- SUB-REQUEST 1: SETUP & VOCABULARY ---
   const vocabPrompt = `
-    Analyze the scenario: "${scenario}".
+    Analyze the scenario: "${scenario}" in the context of learning ${targetLangName}.
     
-    Task 1: Define the two specific roles for this roleplay conversation.
-    - userRole: The learner/protagonist (e.g., "International Student", "Tourist", "Patient"). Name MUST be in ${langName}.
-    - partnerRole: The person they are talking to (e.g., "Neighbor", "Waiter", "Doctor"). Name MUST be in ${langName}.
-    - Ensure these roles make sense together for the context "${scenario}".
+    Task 1: Define two specific roles for a conversation.
+    - userRole: The learner (e.g., "International Student", "Tourist"). Name MUST be in ${uiLangName}.
+    - partnerRole: The person they are talking to. Name MUST be in ${uiLangName}.
     
-    Task 2: Create a Japanese language study list of 12-15 essential Vocabulary words.
+    Task 2: Create a ${targetLangName} language study list of 12-15 essential Vocabulary words.
+    - IMPORTANT: Include phonetic reading (like Pinyin for Chinese, Romaji for Japanese) in the 'romaji' field.
     
     Output strictly in JSON.
   `;
@@ -158,8 +118,8 @@ export const generateVocabularyAndExpressions = async (
       setup: {
           type: Type.OBJECT,
           properties: {
-            userRole: { type: Type.STRING, description: `The user's role name in ${langName}` },
-            partnerRole: { type: Type.STRING, description: `The partner's role name in ${langName}` }
+            userRole: { type: Type.STRING },
+            partnerRole: { type: Type.STRING }
           },
           required: ["userRole", "partnerRole"]
       },
@@ -169,14 +129,11 @@ export const generateVocabularyAndExpressions = async (
           type: Type.OBJECT,
           properties: {
             term: { type: Type.STRING },
-            kana: { type: Type.STRING },
-            romaji: { type: Type.STRING },
+            kana: { type: Type.STRING, description: "Phonetic script like Kana or Pinyin" },
+            romaji: { type: Type.STRING, description: "Romanized reading" },
             meaning: { 
               type: Type.OBJECT, 
-              properties: {
-                en: { type: Type.STRING },
-                zh: { type: Type.STRING }
-              },
+              properties: { en: { type: Type.STRING }, zh: { type: Type.STRING } },
               required: ["en", "zh"]
             },
             type: { type: Type.STRING }
@@ -186,11 +143,9 @@ export const generateVocabularyAndExpressions = async (
     }
   };
 
-  // --- SUB-REQUEST 2: EXPRESSIONS ---
   const expressionPrompt = `
-    Context: Japanese learning scenario "${scenario}".
-    Task: Create a list of 6-8 common useful Expressions/Phrases for this scenario.
-    
+    Context: Learning ${targetLangName} for scenario "${scenario}".
+    Task: Create 6-8 common useful Expressions/Phrases.
     Output strictly in JSON.
   `;
 
@@ -207,10 +162,7 @@ export const generateVocabularyAndExpressions = async (
             romaji: { type: Type.STRING },
             meaning: { 
               type: Type.OBJECT, 
-              properties: {
-                en: { type: Type.STRING },
-                zh: { type: Type.STRING }
-              },
+              properties: { en: { type: Type.STRING }, zh: { type: Type.STRING } },
               required: ["en", "zh"]
             },
             nuance: { type: Type.STRING }
@@ -225,778 +177,290 @@ export const generateVocabularyAndExpressions = async (
       ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: vocabPrompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: vocabSchema
-        }
+        config: { responseMimeType: "application/json", responseSchema: vocabSchema }
       }),
       ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: expressionPrompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: expressionSchema
-        }
+        config: { responseMimeType: "application/json", responseSchema: expressionSchema }
       })
     ]);
 
     let vocabData: any = {};
     let exprData: any = {};
-
-    if (vocabResponse.text) {
-      const cleanVocab = cleanJsonText(vocabResponse.text);
-      try {
-         vocabData = JSON.parse(cleanVocab);
-      } catch (e) { console.error("Vocab JSON parse failed", e); }
-    }
-
-    if (exprResponse.text) {
-      const cleanExpr = cleanJsonText(exprResponse.text);
-      try {
-         exprData = JSON.parse(cleanExpr);
-      } catch (e) { console.error("Expression JSON parse failed", e); }
-    }
+    if (vocabResponse.text) vocabData = JSON.parse(cleanJsonText(vocabResponse.text));
+    if (exprResponse.text) exprData = JSON.parse(cleanJsonText(exprResponse.text));
       
     return {
       scenarioName: scenario,
+      targetLanguage: targetLang,
       vocabulary: vocabData.vocabulary || [],
       expressions: exprData.expressions || [],
       dialogues: [],
-      // Return the determined roles to be passed to step 2
       roles: vocabData.setup ? { user: vocabData.setup.userRole, partner: vocabData.setup.partnerRole } : undefined
     };
-
   } catch (e) {
-    console.error("Vocab generation error", e);
+    console.error(e);
+    return { scenarioName: scenario, targetLanguage: targetLang, vocabulary: [], expressions: [], dialogues: [] };
   }
-  
-  // Fallback
-  return {
-    scenarioName: scenario,
-    vocabulary: [],
-    expressions: [],
-    dialogues: [],
-    roles: { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' }
-  };
 };
-
-// ... existing regenerateSection and generateMoreItems functions ...
 
 export const regenerateSection = async (
   scenario: string,
+  targetLang: LearningLanguage,
   type: 'vocab' | 'expression',
-  language: Language = 'zh',
-  customApiKey?: string
+  uiLang: Language = 'zh'
 ): Promise<(VocabularyItem | ExpressionItem)[]> => {
-  const ai = getAiInstance(customApiKey);
-  const langName = language === 'zh' ? 'Simplified Chinese' : 'English';
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const targetLangName = LEARNING_LANGUAGES.find(l => l.id === targetLang)?.name.en || 'Japanese';
   
   const isVocab = type === 'vocab';
-  const label = isVocab ? 'vocabulary words' : 'common phrases/expressions';
   const count = isVocab ? 12 : 8; 
-  
-  const prompt = `
-    Context: Japanese learning scenario "${scenario}".
-    Task: Create a Japanese language study list of ${count} essential ${label}.
-    
-    Requirements:
-    - Highly relevant to the scenario.
-    - Definitions in English and ${langName}.
-    
-    Output strictly in JSON.
-  `;
-
-  // Define Schema based on type
-  const vocabSchema = {
-    type: Type.ARRAY,
-    items: {
-      type: Type.OBJECT,
-      properties: {
-        term: { type: Type.STRING },
-        kana: { type: Type.STRING },
-        romaji: { type: Type.STRING },
-        meaning: { 
-          type: Type.OBJECT, 
-          properties: {
-            en: { type: Type.STRING },
-            zh: { type: Type.STRING }
-          },
-          required: ["en", "zh"]
-        },
-        type: { type: Type.STRING }
-      }
-    }
-  };
-
-  const exprSchema = {
-    type: Type.ARRAY,
-    items: {
-      type: Type.OBJECT,
-      properties: {
-        phrase: { type: Type.STRING },
-        kana: { type: Type.STRING },
-        romaji: { type: Type.STRING },
-        meaning: { 
-          type: Type.OBJECT, 
-          properties: {
-            en: { type: Type.STRING },
-            zh: { type: Type.STRING }
-          },
-          required: ["en", "zh"]
-        },
-        nuance: { type: Type.STRING }
-      }
-    }
-  };
+  const prompt = `Learning ${targetLangName} scenario: "${scenario}". Generate ${count} ${isVocab ? 'words' : 'expressions'}. Output JSON.`;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: isVocab ? vocabSchema : exprSchema
-      }
+      config: { responseMimeType: "application/json" }
     });
-
     if (response.text) {
-      const cleanText = cleanJsonText(response.text);
-      const result = JSON.parse(cleanText);
-      return Array.isArray(result) ? result : [];
+      const result = JSON.parse(cleanJsonText(response.text));
+      return Array.isArray(result) ? result : (result.vocabulary || result.expressions || []);
     }
-  } catch (e) {
-    console.error(`Regenerate ${type} error`, e);
-  }
-
+  } catch (e) { console.error(e); }
   return [];
 };
-
 
 export const generateMoreItems = async (
   scenario: string,
+  targetLang: LearningLanguage,
   type: 'vocab' | 'expression',
-  existingItems: string[],
-  language: Language = 'zh',
-  customApiKey?: string
+  existingItems: string[]
 ): Promise<(VocabularyItem | ExpressionItem)[]> => {
-  const ai = getAiInstance(customApiKey);
-  
-  const isVocab = type === 'vocab';
-  const label = isVocab ? 'vocabulary words' : 'common phrases/expressions';
-  const count = isVocab ? 10 : 5;
-  
-  // To keep prompt short, only send last 30 existing items if list is huge
-  const excludeList = existingItems.slice(-30).join('", "');
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const targetLangName = LEARNING_LANGUAGES.find(l => l.id === targetLang)?.name.en || 'Japanese';
+  const prompt = `Learning ${targetLangName} scenario: "${scenario}". Generate more items, excluding: ${existingItems.slice(-20).join(', ')}. JSON.`;
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: { responseMimeType: "application/json" }
+    });
+    if (response.text) {
+      const result = JSON.parse(cleanJsonText(response.text));
+      return Array.isArray(result) ? result : (result.vocabulary || result.expressions || []);
+    }
+  } catch (e) { console.error(e); }
+  return [];
+};
+
+const generateSingleScene = async (
+  scenario: string,
+  targetLang: LearningLanguage,
+  sceneIndex: number,
+  sceneType: string,
+  contextVocab: string,
+  roles: { user: string, partner: string },
+  uiLang: Language,
+  attempt: number = 1,
+  customPrompt?: string
+): Promise<DialogueSection> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const targetLangName = LEARNING_LANGUAGES.find(l => l.id === targetLang)?.name.en || 'Japanese';
+  const uiLangName = uiLang === 'zh' ? 'Simplified Chinese' : 'English';
+
+  const goal = customPrompt || (sceneIndex === 1 ? "Opening" : sceneIndex === 2 ? "Interaction" : "Closing");
 
   const prompt = `
-    Context: Japanese learning scenario "${scenario}".
-    Task: Generate ${count} NEW ${label} related to this scenario.
+    Write a ${targetLangName} Dialogue for learning.
+    Scenario: "${scenario}".
+    Scene Type: ${sceneType}. Goal: ${goal}.
+    Roles: A (User - "${roles.user}"), B (Partner - "${roles.partner}").
     
-    CRITICAL CONSTRAINT: 
-    - DO NOT include these items already generated: "${excludeList}".
-    - Provide strictly unique, new items.
+    Requirements:
+    - Language: Use natural, spoken ${targetLangName}.
+    - Include Phonetic readings (Romaji/Pinyin) for ALL lines in 'romaji' and 'kana' fields.
+    - Provide translations in English and ${uiLangName}.
     
-    Output strictly in JSON.
+    Output JSON:
+    { "title": "...", "lines": [ { "speaker": "A", "roleName": "...", "japanese": "...", "kana": "...", "romaji": "...", "translation": { "en": "...", "zh": "..." } } ] }
   `;
-
-  // Define Schema based on type
-  const vocabSchema = {
-    type: Type.ARRAY,
-    items: {
-      type: Type.OBJECT,
-      properties: {
-        term: { type: Type.STRING },
-        kana: { type: Type.STRING },
-        romaji: { type: Type.STRING },
-        meaning: { 
-          type: Type.OBJECT, 
-          properties: {
-            en: { type: Type.STRING },
-            zh: { type: Type.STRING }
-          },
-          required: ["en", "zh"]
-        },
-        type: { type: Type.STRING }
-      }
-    }
-  };
-
-  const exprSchema = {
-    type: Type.ARRAY,
-    items: {
-      type: Type.OBJECT,
-      properties: {
-        phrase: { type: Type.STRING },
-        kana: { type: Type.STRING },
-        romaji: { type: Type.STRING },
-        meaning: { 
-          type: Type.OBJECT, 
-          properties: {
-            en: { type: Type.STRING },
-            zh: { type: Type.STRING }
-          },
-          required: ["en", "zh"]
-        },
-        nuance: { type: Type.STRING }
-      }
-    }
-  };
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: isVocab ? vocabSchema : exprSchema
-      }
+      config: { responseMimeType: "application/json" }
     });
 
     if (response.text) {
-      const cleanText = cleanJsonText(response.text);
-      const result = JSON.parse(cleanText);
-      return Array.isArray(result) ? result : [];
-    }
-  } catch (e) {
-    console.error(`Generate more ${type} error`, e);
-  }
-
-  return [];
-};
-
-// INTERNAL HELPER: Generate a SINGLE scene with Retry & Timeout logic
-const generateSingleScene = async (
-  scenario: string,
-  sceneIndex: number, // 1, 2, or 3
-  sceneType: string, // "Intro", "Process", "Conclusion" OR "Custom"
-  contextVocab: string,
-  roles: { user: string, partner: string },
-  language: Language,
-  customApiKey?: string,
-  attempt: number = 1,
-  customPrompt?: string // For custom scenes
-): Promise<DialogueSection> => {
-  const ai = getAiInstance(customApiKey);
-
-  let goalInstruction = "";
-  if (sceneType === "Custom" && customPrompt) {
-      goalInstruction = `Custom Scene Goal: ${customPrompt}. Write a conversation focusing on this specific topic within the larger scenario.`;
-  } else {
-      goalInstruction = {
-        1: "Scene 1: Opening. Establish the goal.",
-        2: "Scene 2: Interaction. Details/complication.",
-        3: "Scene 3: Closing. Completion/Farewell. NO trailing questions."
-      }[sceneIndex] || "";
-  }
-
-  const titleLanguage = language === 'zh' ? "Simplified Chinese (简体中文)" : "English";
-
-  // Strict instructions for consistency
-  const prompt = `
-    Write a Dialogue Scene for: "${scenario}".
-    Type: ${sceneType}.
-    Goal: ${goalInstruction}.
-    Context: ${contextVocab}.
-    
-    DEFINED ROLES (STRICTLY ENFORCE):
-    - Speaker A (User/Protagonist): "${roles.user}"
-    - Speaker B (Partner/Native): "${roles.partner}"
-    
-    Output strictly valid JSON (No Markdown).
-    
-    CRITICAL RULES:
-    1. "title": Short, specific title for this scene in ${titleLanguage}. DO NOT include the scenario name "${scenario}" in the title.
-    2. "lines": Array of dialogue turns.
-    3. "speaker": MUST be strictly "A" or "B". 
-    4. "roleName":
-       - If speaker is "A", set roleName to "${roles.user}".
-       - If speaker is "B", set roleName to "${roles.partner}".
-       - DO NOT invent new role names. Use exactly provided names.
-
-    Structure:
-    {
-      "title": "Title in ${titleLanguage}",
-      "lines": [
-        {
-          "speaker": "A",
-          "roleName": "${roles.user}",
-          "japanese": "...",
-          "kana": "...",
-          "romaji": "...",
-          "translation": { "en": "...", "zh": "..." }
-        }
-      ]
-    }
-
-    Requirements:
-    - 4-6 concise dialogue turns.
-    - Natural Japanese spoken style.
-  `;
-
-  try {
-    // Timeout 50s
-    const TIMEOUT_MS = 50000; 
-
-    const fetchPromise = ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-      }
-    });
-
-    const timeoutPromise = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error("Timeout")), TIMEOUT_MS)
-    );
-
-    const response = await Promise.race([fetchPromise, timeoutPromise]);
-
-    if (response.text) {
-      const cleanText = cleanJsonText(response.text);
-      let parsed: any;
-      
-      try {
-        parsed = JSON.parse(cleanText);
-      } catch (e) {
-        console.warn(`JSON Parse failed for Scene ${sceneIndex}:`, cleanText.substring(0, 100));
-        throw new Error("Invalid JSON structure");
-      }
-      
-      // Robust Parsing: recursively search for lines
-      const lines = findDialogueLines(parsed);
-      let title = findTitle(parsed, sceneType === "Custom" ? "Custom Scene" : `Scene ${sceneIndex}`);
-
-      if (!lines) {
-         console.warn("Parsed object missing lines array:", parsed);
-         throw new Error("Response format missing dialogue lines");
-      }
-
-      // --- TITLE CLEANING LOGIC ---
-      try {
-        const scenarioNamePattern = new RegExp(`^${scenario.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:\\-]?\\s*`, 'i');
-        title = title.replace(scenarioNamePattern, '');
-        title = title.replace(/^(Scene|场景)\s*\d+\s*[:\\-]?\s*/i, '');
-      } catch (err) {
-        // Fallback
-      }
-      
-      // Sanitize lines to match interface and enforce UI alignment
-      const sanitizedLines: DialogueLine[] = lines.map((l: any) => {
-          // Normalize speaker to strictly A or B
-          let cleanSpeaker: 'A' | 'B' = 'A';
-          if (l.speaker === 'B' || l.speaker === 'b') cleanSpeaker = 'B';
-          
-          // Fallback heuristic if Model fails strict A/B (rare now with prompt fix)
-          if (!l.speaker) {
-             const r = (l.roleName || '').toLowerCase();
-             // Check if role name matches the user role defined
-             if (r === roles.user.toLowerCase() || r.includes('me') || r.includes('user') || r.includes('我')) {
-                 cleanSpeaker = 'A';
-             } else {
-                 cleanSpeaker = 'B';
-             }
-          }
-
-          return {
-            speaker: cleanSpeaker,
-            // Force the consistent role name from params, ignore hallucinations if any
-            roleName: cleanSpeaker === 'A' ? roles.user : roles.partner,
+      const parsed = JSON.parse(cleanJsonText(response.text));
+      const lines = findDialogueLines(parsed) || [];
+      return {
+          title: findTitle(parsed, `Scene ${sceneIndex}`),
+          lines: lines.map((l: any) => ({
+            speaker: l.speaker === 'B' || l.speaker === 'b' ? 'B' : 'A',
+            roleName: (l.speaker === 'B' || l.speaker === 'b') ? roles.partner : roles.user,
             japanese: l.japanese || l.text || '...',
             kana: l.kana || '',
             romaji: l.romaji || '',
             translation: l.translation || { en: '', zh: '' }
-          };
-      });
-
-      return {
-          title,
-          lines: sanitizedLines
+          }))
       };
     }
-    throw new Error("Empty response body");
-
+    throw new Error("Empty response");
   } catch (error) {
-    console.warn(`Scene ${sceneIndex} attempt ${attempt} failed:`, error);
-    if (attempt < 2) {
-      // Retry once
-      return generateSingleScene(scenario, sceneIndex, sceneType, contextVocab, roles, language, customApiKey, attempt + 1, customPrompt);
-    }
-    
-    // FALLBACK OBJECT
-    return {
-      title: sceneType === "Custom" ? "Custom Scene (Unavailable)" : `Scene ${sceneIndex} (Unavailable)`,
-      lines: [{
-        speaker: "B",
-        roleName: roles.partner || "System",
-        japanese: "申し訳ありません。生成に時間がかかりすぎました。",
-        kana: "もうしわけありません。せいせいにじかんがかかりすぎました。",
-        romaji: "Moushiwake arimasen. Seisei ni jikan ga kakarisugimashita.",
-        translation: { 
-            en: "Sorry, generation timed out. Please try again.", 
-            zh: "抱歉，生成超时。请尝试重新生成。" 
-        }
-      }]
-    };
+    if (attempt < 2) return generateSingleScene(scenario, targetLang, sceneIndex, sceneType, contextVocab, roles, uiLang, attempt + 1, customPrompt);
+    return { title: `Scene ${sceneIndex}`, lines: [] };
   }
 };
 
-// --- NEW EXPORTED WRAPPER FOR SINGLE SCENE REGENERATION ---
-export const regenerateSingleDialogue = async (
-  scenario: string,
-  sceneIndex: number, // 0, 1, or 2 (0-based)
-  contextVocabulary: VocabularyItem[], 
-  roles: { user: string, partner: string },
-  language: Language = 'zh', 
-  customApiKey?: string
-): Promise<DialogueSection> => {
-    
-    // Convert 0-based index to 1-based Logic
-    const index = sceneIndex + 1;
-    // Note: If sceneIndex >= 3, it's likely a custom scene, but for regeneration we treat it as Process/Custom
-    // Actually, for custom scenes, we might lose the original prompt context in this simplified regenerate function.
-    // For now, if index > 3, we treat it as "Process" type for regeneration which is a safe generic fallback.
-    const type = index === 1 ? "Intro" : (index === 2 ? "Process" : (index === 3 ? "Conclusion" : "Custom"));
-    
-    const vocabList = contextVocabulary.slice(0, 8).map(v => v.term).join(", ");
-
-    return await generateSingleScene(
-        scenario, 
-        index, 
-        type, 
-        vocabList, 
-        roles, 
-        language, 
-        customApiKey
-    );
-};
-
-// --- NEW EXPORTED WRAPPER FOR CUSTOM SCENE GENERATION ---
-export const generateCustomScene = async (
-  scenario: string,
-  userPrompt: string,
-  contextVocabulary: VocabularyItem[], 
-  roles: { user: string, partner: string },
-  language: Language = 'zh', 
-  customApiKey?: string
-): Promise<DialogueSection> => {
-    
-    const vocabList = contextVocabulary.slice(0, 8).map(v => v.term).join(", ");
-
-    // sceneIndex 99 to indicate custom
-    return await generateSingleScene(
-        scenario, 
-        99, 
-        "Custom", 
-        vocabList, 
-        roles, 
-        language, 
-        customApiKey,
-        1,
-        userPrompt
-    );
-};
-
-
-// ... existing generateDialoguesWithCallback ...
-// STEP 2: Generate Dialogues (OPTIMIZED: INCREMENTAL STREAMING)
 export const generateDialoguesWithCallback = async (
   scenario: string, 
+  targetLang: LearningLanguage,
   contextVocabulary: VocabularyItem[], 
   roles: { user: string, partner: string },
   onSceneComplete: (index: number, scene: DialogueSection) => void,
-  language: Language = 'zh', 
-  customApiKey?: string
+  uiLang: Language = 'zh'
 ): Promise<void> => {
-  
   const vocabList = contextVocabulary.slice(0, 8).map(v => v.term).join(", ");
-
-  // Fire requests. We do NOT await Promise.all here because we want to trigger callbacks individually.
-  
-  const p1 = generateSingleScene(scenario, 1, "Intro", vocabList, roles, language, customApiKey)
-    .then(scene => onSceneComplete(0, scene));
-    
-  const p2 = generateSingleScene(scenario, 2, "Process", vocabList, roles, language, customApiKey)
-    .then(scene => onSceneComplete(1, scene));
-    
-  const p3 = generateSingleScene(scenario, 3, "Conclusion", vocabList, roles, language, customApiKey)
-    .then(scene => onSceneComplete(2, scene));
-
+  const p1 = generateSingleScene(scenario, targetLang, 1, "Intro", vocabList, roles, uiLang).then(s => onSceneComplete(0, s));
+  const p2 = generateSingleScene(scenario, targetLang, 2, "Process", vocabList, roles, uiLang).then(s => onSceneComplete(1, s));
+  const p3 = generateSingleScene(scenario, targetLang, 3, "Conclusion", vocabList, roles, uiLang).then(s => onSceneComplete(2, s));
   await Promise.all([p1, p2, p3]);
 };
 
-// Kept for backward compatibility if needed, but App.tsx should use the callback version now
-export const generateDialoguesOnly = async (
-  scenario: string, 
+export const regenerateSingleDialogue = async (
+  scenario: string,
+  targetLang: LearningLanguage,
+  sceneIndex: number,
   contextVocabulary: VocabularyItem[], 
   roles: { user: string, partner: string },
-  language: Language = 'zh', 
-  customApiKey?: string
-): Promise<DialogueSection[]> => {
-    const results: DialogueSection[] = [];
-    await generateDialoguesWithCallback(
-        scenario, 
-        contextVocabulary, 
-        roles,
-        (idx, scene) => { results[idx] = scene; },
-        language, 
-        customApiKey
-    );
-    return results;
+  uiLang: Language = 'zh'
+): Promise<DialogueSection> => {
+    const vocabList = contextVocabulary.slice(0, 8).map(v => v.term).join(", ");
+    return await generateSingleScene(scenario, targetLang, sceneIndex + 1, "Dialogue", vocabList, roles, uiLang);
 };
 
-
-// Keep the old full generation function for fallback/regenerate all if needed
-export const generateScenarioContent = async (scenario: string, language: Language = 'zh', customApiKey?: string): Promise<ScenarioContent> => {
-   // Implementation reused for single-shot generation (e.g. from history regeneration)
-   const part1 = await generateVocabularyAndExpressions(scenario, language, customApiKey);
-   const roles = part1.roles || { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' };
-   const part2 = await generateDialoguesOnly(scenario, part1.vocabulary || [], roles, language, customApiKey);
-   
-   return {
-     scenarioName: scenario,
-     vocabulary: part1.vocabulary || [],
-     expressions: part1.expressions || [],
-     dialogues: part2,
-     roles: roles,
-     timestamp: Date.now()
-   };
+export const generateCustomScene = async (
+  scenario: string,
+  targetLang: LearningLanguage,
+  userPrompt: string,
+  contextVocabulary: VocabularyItem[], 
+  roles: { user: string, partner: string },
+  uiLang: Language = 'zh'
+): Promise<DialogueSection> => {
+    const vocabList = contextVocabulary.slice(0, 8).map(v => v.term).join(", ");
+    return await generateSingleScene(scenario, targetLang, 99, "Custom", vocabList, roles, uiLang, 1, userPrompt);
 };
 
-// ... existing audio functions ...
-// Retrieve AudioBuffer for text (from Cache or Network)
-export const getAudioBuffer = async (text: string, voiceName: string, customApiKey?: string): Promise<AudioBuffer> => {
-  const ai = getAiInstance(customApiKey);
+// --- AUDIO FUNCTIONS ---
+
+export const getAudioBuffer = async (text: string, voiceName: string): Promise<AudioBuffer> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const ctx = getAudioContext();
   const cacheKey = `${voiceName}-${text}`;
+  if (audioCache.has(cacheKey)) return audioCache.get(cacheKey)!;
 
-  if (audioCache.has(cacheKey)) {
-    return audioCache.get(cacheKey)!;
-  }
-
-  // Fetch from API
-  const responseStream = await ai.models.generateContentStream({
+  // Use generateContent for speech generation as per single-speaker example
+  const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
     contents: [{ parts: [{ text }] }],
     config: {
       responseModalities: [Modality.AUDIO],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: { voiceName }
-        },
-      },
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
     },
   });
 
-  const collectedChunks: Float32Array[] = [];
-  let totalLength = 0;
+  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  if (!base64Audio) throw new Error("No audio data returned");
 
-  for await (const chunk of responseStream) {
-    const base64Audio = chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (base64Audio) {
-      const float32Data = processAudioChunk(base64Audio);
-      collectedChunks.push(float32Data);
-      totalLength += float32Data.length;
-    }
-  }
+  // Manual decoding logic using the helper defined above
+  const audioBuffer = await decodeAudioData(
+    decode(base64Audio),
+    ctx,
+    24000,
+    1,
+  );
 
-  const fullBuffer = ctx.createBuffer(1, totalLength, 24000);
-  const channelData = fullBuffer.getChannelData(0);
-  let offset = 0;
-  for (const chunk of collectedChunks) {
-    // cast chunk to any to bypass strict ArrayBuffer checks in some build environments
-    channelData.set(chunk as any, offset);
-    offset += chunk.length;
-  }
-  
-  audioCache.set(cacheKey, fullBuffer);
-  return fullBuffer;
+  audioCache.set(cacheKey, audioBuffer);
+  return audioBuffer;
 };
 
-// Generate Dialogue Audio with Concurrency Control and Progress Reporting
+export const playSystemTTS = (text: string, langCode: string = 'ja-JP'): Promise<void> => {
+    return new Promise((resolve) => {
+        if (!window.speechSynthesis) { resolve(); return; }
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = langCode;
+        utterance.rate = 1.0; 
+        const voices = window.speechSynthesis.getVoices();
+        const voice = voices.find(v => v.lang === langCode || v.lang.startsWith(langCode.split('-')[0]));
+        if (voice) utterance.voice = voice;
+        utterance.onend = () => resolve();
+        utterance.onerror = () => resolve();
+        window.speechSynthesis.speak(utterance);
+    });
+};
+
+export const playTTS = async (
+  text: string, 
+  voiceName: 'Puck' | 'Kore' = 'Puck', 
+  engine: VoiceEngine = 'system',
+  langCode: string = 'ja-JP'
+): Promise<void> => {
+  if (engine === 'system') return playSystemTTS(text, langCode);
+  const ctx = getAudioContext();
+  const cacheKey = `${voiceName}-${text}`;
+  
+  if (audioCache.has(cacheKey)) {
+    const source = ctx.createBufferSource();
+    source.buffer = audioCache.get(cacheKey)!;
+    source.connect(ctx.destination);
+    source.start();
+    return;
+  }
+  
+  try {
+    const buffer = await getAudioBuffer(text, voiceName);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start();
+  } catch (err) {
+    playSystemTTS(text, langCode);
+  }
+};
+
 export const generateDialogueAudioWithProgress = async (
     lines: {text: string, speaker: string}[],
-    onProgress?: ProgressCallback,
-    customApiKey?: string
+    onProgress?: ProgressCallback
 ): Promise<Blob> => {
    const ctx = getAudioContext();
    const buffers: AudioBuffer[] = [];
-   
-   // BATCH PROCESSING
-   const BATCH_SIZE = 3;
-   
-   for (let i = 0; i < lines.length; i += BATCH_SIZE) {
-       const batch = lines.slice(i, i + BATCH_SIZE);
-       
-       const batchPromises = batch.map(async (line, batchIdx) => {
-           const voice = line.speaker === 'A' ? 'Puck' : 'Kore';
-           let attempts = 0;
-           while (attempts < 3) {
-             try {
-               return await getAudioBuffer(line.text, voice, customApiKey);
-             } catch (e) {
-               attempts++;
-               await new Promise(r => setTimeout(r, 500 * attempts));
-               if (attempts === 3) throw e;
-             }
-           }
-           throw new Error("Failed to fetch audio");
-       });
-
-       const batchBuffers = await Promise.all(batchPromises);
-       buffers.push(...batchBuffers);
-       
-       if (onProgress) {
-           onProgress(Math.min(i + BATCH_SIZE, lines.length), lines.length);
-       }
-       await new Promise(r => setTimeout(r, 0));
+   for (let i = 0; i < lines.length; i++) {
+       const voice = lines[i].speaker === 'A' ? 'Puck' : 'Kore';
+       const buf = await getAudioBuffer(lines[i].text, voice);
+       buffers.push(buf);
+       if (onProgress) onProgress(i + 1, lines.length);
    }
-
-   const gapSeconds = 0.5;
-   const gapSamples = Math.floor(gapSeconds * 24000);
+   const gapSamples = Math.floor(0.5 * 24000);
    const totalLength = buffers.reduce((acc, buf) => acc + buf.length + gapSamples, 0);
-
    const outputBuffer = ctx.createBuffer(1, totalLength, 24000);
    const outputData = outputBuffer.getChannelData(0);
-   
    let offset = 0;
    for (const buf of buffers) {
      outputData.set(buf.getChannelData(0) as any, offset);
      offset += buf.length + gapSamples;
    }
-
    return encodeWAV(outputData, 24000);
 };
 
-// Native Browser TTS (Fast & Free)
-export const playSystemTTS = (text: string): Promise<void> => {
-    return new Promise((resolve) => {
-        if (!window.speechSynthesis) {
-            console.error("Web Speech API not supported");
-            resolve();
-            return;
-        }
-
-        // Cancel previous utterances
-        window.speechSynthesis.cancel();
-
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'ja-JP';
-        utterance.rate = 1.0; 
-        
-        // Try to find a Japanese voice
-        const voices = window.speechSynthesis.getVoices();
-        const jaVoice = voices.find(v => v.lang.includes('ja') || v.name.includes('Japanese'));
-        if (jaVoice) {
-            utterance.voice = jaVoice;
-        }
-
-        utterance.onend = () => {
-            resolve();
-        };
-
-        utterance.onerror = (e) => {
-            console.error("System TTS Error", e);
-            resolve(); // Resolve anyway to reset UI state
-        };
-
-        window.speechSynthesis.speak(utterance);
-    });
-};
-
-// Unified Play TTS function
-export const playTTS = async (
-  text: string, 
-  voiceName: 'Puck' | 'Kore' = 'Puck', 
-  engine: VoiceEngine = 'system',
-  customApiKey?: string
-): Promise<void> => {
-  // If engine is system, use native browser TTS
-  if (engine === 'system') {
-    return playSystemTTS(text);
-  }
-
-  // Otherwise, use Gemini AI
-  const ai = getAiInstance(customApiKey);
-  const ctx = getAudioContext();
-  const cacheKey = `${voiceName}-${text}`;
-
-  if (audioCache.has(cacheKey)) {
-    const buffer = audioCache.get(cacheKey)!;
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.start();
-    return;
-  }
-
-  try {
-    const responseStream = await ai.models.generateContentStream({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName }
-          },
-        },
-      },
-    });
-
-    let nextStartTime = ctx.currentTime;
-    const collectedChunks: Float32Array[] = [];
-    let totalLength = 0;
-
-    for await (const chunk of responseStream) {
-      const base64Audio = chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      
-      if (base64Audio) {
-        const float32Data = processAudioChunk(base64Audio);
-        collectedChunks.push(float32Data);
-        totalLength += float32Data.length;
-
-        const buffer = ctx.createBuffer(1, float32Data.length, 24000);
-        buffer.copyToChannel(float32Data as any, 0);
-
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(ctx.destination);
-
-        const startAt = Math.max(ctx.currentTime, nextStartTime);
-        source.start(startAt);
-        nextStartTime = startAt + buffer.duration;
-      }
-    }
-
-    if (totalLength > 0) {
-      const fullBuffer = ctx.createBuffer(1, totalLength, 24000);
-      const channelData = fullBuffer.getChannelData(0);
-      let offset = 0;
-      for (const chunk of collectedChunks) {
-        // cast to any to fix ts build error
-        channelData.set(chunk as any, offset);
-        offset += chunk.length;
-      }
-      audioCache.set(cacheKey, fullBuffer);
-    }
-
-  } catch (err) {
-    console.error("TTS Streaming Error:", err);
-    throw err;
-  }
-};
-
-// WAV Encoder helper
 function encodeWAV(samples: Float32Array, sampleRate: number): Blob {
   const buffer = new ArrayBuffer(44 + samples.length * 2);
   const view = new DataView(buffer);
-
-  const writeString = (view: DataView, offset: number, string: string) => {
-    for (let i = 0; i < string.length; i++) {
-      view.setUint8(offset + i, string.charCodeAt(i));
-    }
-  };
-
+  const writeString = (v: DataView, o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
   writeString(view, 0, 'RIFF');
   view.setUint32(4, 36 + samples.length * 2, true);
   writeString(view, 8, 'WAVE');
@@ -1010,12 +474,10 @@ function encodeWAV(samples: Float32Array, sampleRate: number): Blob {
   view.setUint16(34, 16, true);
   writeString(view, 36, 'data');
   view.setUint32(40, samples.length * 2, true);
-
   let offset = 44;
   for (let i = 0; i < samples.length; i++, offset += 2) {
     const s = Math.max(-1, Math.min(1, samples[i]));
     view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
   }
-
   return new Blob([view], { type: 'audio/wav' });
 }
