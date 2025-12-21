@@ -60,7 +60,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   ? (isZh ? '今日免费额度已用完' : 'Daily Free Quota Exceeded') 
                   : (isZh ? 'API 设置' : 'API Configuration')}
               </h2>
-              <p className={`text-sm ${isQuotaExceeded ? 'text-red-100' : 'text-indigo-100'} leading-relaxed`}>
+              {/* Force white/80 color to ensure visibility against indigo/red background */}
+              <p className="text-sm text-white/90 leading-relaxed font-medium">
                 {isQuotaExceeded
                   ? (isZh ? '请使用您自己的 API Key 继续生成。' : 'Please use your own API Key to continue.')
                   : (isZh ? '请选择您希望如何使用生成功能。' : 'Choose how you want to generate content.')}

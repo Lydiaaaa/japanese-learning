@@ -38,7 +38,6 @@ export default function App() {
   const [language, setLanguage] = useState<Language>(getInitialLanguage());
   const [targetLanguage, setTargetLanguage] = useState<LearningLanguage>(getInitialTargetLanguage());
   const [notation, setNotation] = useState<Notation>('kana');
-  // Default to system voice to save costs for user
   const [voiceEngine, setVoiceEngine] = useState<VoiceEngine>('system');
   
   const [user, setUser] = useState<User | null>(null);
@@ -54,7 +53,6 @@ export default function App() {
   const t = UI_TEXT[language];
   const activeTargetLang = LEARNING_LANGUAGES.find(l => l.id === targetLanguage)!;
 
-  // Global Theme Sync
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty('--color-primary-50', activeTargetLang.themeLight);
@@ -65,7 +63,6 @@ export default function App() {
     root.style.setProperty('--primary-color', activeTargetLang.theme);
   }, [targetLanguage, activeTargetLang]);
 
-  // Initial Load from LocalStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem('nihongo_favorites');
@@ -76,28 +73,22 @@ export default function App() {
       if (savedNotation) setNotation(savedNotation as Notation);
       const savedEngine = localStorage.getItem('nihongo_voice_engine');
       if (savedEngine) setVoiceEngine(savedEngine as VoiceEngine);
-      
-      // We do NOT aggressively check API key on mount anymore, 
-      // we check it when the user actually tries to perform an action.
     } catch (e) { console.error(e); }
   }, []);
 
-  // Auth Subscription & Sync Logic
   useEffect(() => {
     const unsubscribe = subscribeToAuth(async (authUser) => {
       setUser(authUser);
       
-      // Auto-set free mode for admins if no key is present
+      // Auto-set free mode for admins
       if (checkIsAdmin(authUser)) {
           if (!localStorage.getItem('nihongo_api_key')) {
               localStorage.setItem('nihongo_api_mode', 'free');
           }
       }
 
-      // If user is logged in, try to sync local data with cloud
       if (authUser && authUser.uid !== GUEST_ID) {
         try {
-            // Read directly from localStorage to ensure we have the latest data before sync
             const localFavs = JSON.parse(localStorage.getItem('nihongo_favorites') || '[]');
             const localHist = JSON.parse(localStorage.getItem('nihongo_scenarios') || '[]');
             
@@ -131,11 +122,9 @@ export default function App() {
   useEffect(() => {
     if (isSyncing) return; 
     
-    // Always save to localStorage as backup/offline cache
     localStorage.setItem('nihongo_favorites', JSON.stringify(savedItems));
     localStorage.setItem('nihongo_scenarios', JSON.stringify(scenarioHistory));
     
-    // If logged in, also try to save to cloud
     if (user && user.uid !== GUEST_ID) {
       saveUserData(user.uid, { favorites: savedItems, history: scenarioHistory });
     }
@@ -146,24 +135,21 @@ export default function App() {
     localStorage.setItem('nihongo_voice_engine', voiceEngine);
   }, [savedItems, scenarioHistory, user, isSyncing, language, targetLanguage, notation, voiceEngine]);
 
-  // Handle Scenario Generation with Robust API Key Checking
   const executeScenarioGeneration = async (scenarioName: string) => {
     // 1. Check for Custom Key
     const customKey = localStorage.getItem('nihongo_api_key');
     // 2. Check for Free Mode Flag
     const isFreeMode = localStorage.getItem('nihongo_api_mode') === 'free';
-    // 3. Check Environment Key (Fallback for dev/free mode)
-    const hasEnvKey = !!process.env.API_KEY;
+    // 3. Check Admin Status
+    const isAdmin = checkIsAdmin(user);
 
-    // Logic: 
-    // If we have a custom key -> Good.
-    // If we have Free Mode set AND an Env Key exists -> Good.
-    // Otherwise -> Prompt user.
-    
-    const isValidConfig = customKey || (isFreeMode && hasEnvKey);
+    // FIX: Relaxed validation. We trust the flag or admin status to break the UI loop.
+    // If the actual API Key (process.env.API_KEY) is missing later, the API call will fail and show an error,
+    // which is better than an infinite loop in the UI.
+    const isValidConfig = customKey || isFreeMode || isAdmin;
 
     if (!isValidConfig) {
-        setLoadingScenarioName(scenarioName); // Remember what they wanted to do
+        setLoadingScenarioName(scenarioName);
         setShowApiKeyModal(true);
         return;
     }
@@ -212,9 +198,8 @@ export default function App() {
       );
     } catch (err: any) {
       console.error(err);
-      // If error is 403/401 related to key, show modal again
       if (err.message?.includes('API Key') || err.message?.includes('403')) {
-          localStorage.removeItem('nihongo_api_mode'); // Reset free mode if it failed
+          localStorage.removeItem('nihongo_api_mode'); 
           setShowApiKeyModal(true);
       }
       setErrorMsg(err.message || t.errorDesc);
@@ -267,20 +252,17 @@ export default function App() {
 
   const handleApiKeyConfirm = (key: string | null) => {
       if (key) {
-          // User provided a custom key
           localStorage.setItem('nihongo_api_key', key);
           localStorage.setItem('nihongo_api_mode', 'custom');
       } else {
-          // User selected free mode
           localStorage.setItem('nihongo_api_mode', 'free');
-          // Clear any old custom key to avoid confusion
           localStorage.removeItem('nihongo_api_key');
       }
       setShowApiKeyModal(false);
       
-      // If we were waiting to load a scenario, try again
+      // Delay slightly to ensure state propagation before retry
       if (loadingScenarioName && viewState !== ViewState.GENERATING) {
-          executeScenarioGeneration(loadingScenarioName);
+          setTimeout(() => executeScenarioGeneration(loadingScenarioName), 50);
       }
   };
 
