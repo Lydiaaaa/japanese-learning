@@ -1,211 +1,156 @@
 
-import { Category, LearningLanguage } from './types';
-
-export interface LanguageConfig {
-  id: LearningLanguage;
-  name: { zh: string, en: string };
-  flag: string;
-  theme: string; // Hex color (600)
-  themeLight: string; // Hex color (50)
-  themeDark: string; // Hex color (700)
-  code: string; // BCP-47
-}
-
-export const LEARNING_LANGUAGES: LanguageConfig[] = [
-  { 
-    id: 'ja', 
-    name: { zh: '日语', en: 'Japanese' }, 
-    flag: '🇯🇵', 
-    theme: '#1996de', 
-    themeLight: '#f0f9ff',
-    themeDark: '#0284c7',
-    code: 'ja-JP' 
-  },
-  { 
-    id: 'en', 
-    name: { zh: '英语', en: 'English' }, 
-    flag: '🇺🇸', 
-    theme: '#4f46e5', 
-    themeLight: '#eef2ff',
-    themeDark: '#4338ca',
-    code: 'en-US' 
-  },
-  { 
-    id: 'zh', 
-    name: { zh: '中文', en: 'Chinese' }, 
-    flag: '🇨🇳', 
-    theme: '#dc2626', 
-    themeLight: '#fef2f2',
-    themeDark: '#b91c1c',
-    code: 'zh-CN' 
-  },
-  { 
-    id: 'fr', 
-    name: { zh: '法语', en: 'French' }, 
-    flag: '🇫🇷', 
-    theme: '#0891b2', 
-    themeLight: '#ecfeff',
-    themeDark: '#0e7490',
-    code: 'fr-FR' 
-  },
-  { 
-    id: 'es', 
-    name: { zh: '西语', en: 'Spanish' }, 
-    flag: '🇪🇸', 
-    theme: '#ea580c', 
-    themeLight: '#fff7ed',
-    themeDark: '#c2410c',
-    code: 'es-ES' 
-  },
-  { 
-    id: 'de', 
-    name: { zh: '德语', en: 'German' }, 
-    flag: '🇩🇪', 
-    theme: '#b45309', 
-    themeLight: '#fffbeb',
-    themeDark: '#92400e',
-    code: 'de-DE' 
-  },
-];
+import { Category } from './types';
 
 export const CATEGORIES: Category[] = [
   {
     id: 'dining',
-    name: { en: 'Dining & Food', zh: '餐饮美食' },
+    name: {
+      en: 'Dining & Food',
+      zh: '餐饮美食'
+    },
     icon: 'Utensils',
     presets: {
       en: [
-        'Eating at a local restaurant',
-        'Ordering at a bar/pub',
-        'Buying groceries at the market',
-        'Asking for the bill',
-        'Ordering a custom coffee at a cafe',
-        'Using a self-service kiosk',
-        'Making a dinner reservation',
-        'Asking about ingredients',
-        'Ordering delivery on an app',
+        'Eating at Saizeriya (Family Restaurant)',
+        'Ordering at an Izakaya',
+        'Buying a Bento at a Konbini',
+        'Asking for separate checks',
+        'Ordering custom toppings at Starbucks',
+        'Using a ticket machine at a Ramen shop',
+        'Reserving a table by phone',
+        'Asking about food allergies',
+        'Ordering delivery via Uber Eats',
         'Complaining about a wrong order',
-        'Buying street food',
-        'Attending a food tasting event'
+        'Buying street food at a festival',
+        'All-you-can-eat Yakiniku course'
       ],
       zh: [
-        '在当地餐厅就餐',
-        '在酒吧/酒馆点餐',
-        '在超市买菜',
-        '结账并要求发票',
-        '在咖啡店定制口味',
-        '使用自助点餐机',
-        '打电话预订座位',
-        '询问食物成分',
-        '在APP上点外卖',
+        '在萨莉亚就餐（家庭餐厅）',
+        '在居酒屋点菜',
+        '在便利店买便当',
+        '结账时要求AA制',
+        '在星巴克定制口味点单',
+        '在拉面店使用自动售票机',
+        '打电话预订餐厅座位',
+        '询问食物过敏源',
+        '用Uber Eats点外卖',
         '投诉上错菜了',
-        '在路边摊买小吃',
-        '参加美食品鉴活动'
+        '在夏日祭买路边摊小吃',
+        '吃烤肉自助餐（放题）'
       ]
     }
   },
   {
     id: 'travel',
-    name: { en: 'Travel & Transport', zh: '旅行交通' },
+    name: {
+      en: 'Travel & Transport',
+      zh: '旅行交通'
+    },
     icon: 'Plane',
     presets: {
       en: [
-        'Check-in at the airport',
-        'Buying a train ticket',
-        'Asking for directions',
+        'Check-in at Haneda Airport',
+        'Buying a Shinkansen ticket',
+        'Asking for directions to the station',
         'Taking a taxi to the hotel',
         'Reporting lost baggage',
-        'Using public transport card',
-        'Checking out of a hotel',
-        'Asking someone to take a photo',
+        'Recharging a Suica/Pasmo card',
+        'Checking out of a Ryokan (Inn)',
+        'Asking a passerby to take a photo',
         'Renting a car',
-        'Asking about the schedule',
-        'Booking a hostel',
-        'Using a storage locker'
+        'Asking about bus schedule',
+        'Booking a capsule hotel',
+        'Storing luggage in a coin locker'
       ],
       zh: [
-        '在机场办理登机',
-        '购买火车票',
-        '询问路怎么走',
+        '在羽田机场办理登机',
+        '购买新干线车票',
+        '询问去车站的路',
         '打车去酒店',
         '报告行李丢失',
-        '使用交通卡',
-        '办理退房手续',
+        '给Suica/Pasmo交通卡充值',
+        '在日式旅馆办理退房',
         '请路人帮忙拍照',
-        '办理租车',
-        '询问班次时刻表',
-        '预订青年旅馆',
-        '使用储物柜'
+        '办理租车手续',
+        '询问巴士时刻表',
+        '预订胶囊旅馆',
+        '使用投币式储物柜寄存行李'
       ]
     }
   },
   {
     id: 'lifestyle',
-    name: { en: 'Daily Life & Services', zh: '日常生活' },
+    name: {
+      en: 'Daily Life & Services',
+      zh: '日常生活'
+    },
     icon: 'Building',
     presets: {
       en: [
-        'Opening a bank account',
-        'Registering at the city office',
+        'Setting up bank auto-transfer at SMBC',
+        'Registering address at City Hall',
         'Getting a haircut',
-        'Sending a package at the post office',
-        'Reporting lost keys to police',
-        'Learning about local recycling',
-        'Visiting a doctor for a checkup',
-        'Signing up for the gym',
-        'Buying tickets for a show',
-        'Visiting a real estate agent',
-        'Calling for home repair',
-        'Applying for a library card'
+        'Sending a package at the Post Office',
+        'Reporting a lost item at the Police Box (Koban)',
+        'Sorting garbage correctly',
+        'Visiting a clinic for a cold',
+        'Signing up for a gym membership',
+        'Buying concert tickets at Loppi',
+        'Looking for an apartment at a real estate agency',
+        'Calling a plumber for a leak',
+        'Renewing a visa at Immigration'
       ],
       zh: [
-        '去银行开户',
-        '在市政大厅登记',
-        '去理发店剪发',
+        '在三井住友银行办理转账',
+        '在市役所登记住址',
+        '去理发店剪头发',
         '去邮局寄包裹',
-        '去警察局报失',
-        '学习当地垃圾分类',
-        '去看医生检查身体',
+        '在派出所（交番）挂失',
+        '正确进行垃圾分类',
+        '感冒了去诊所看病',
         '办理健身房会员',
-        '购买演出门票',
-        '去中介看房子',
-        '呼叫家庭维修',
-        '申请办理借书证'
+        '在便利店机器买演唱会门票',
+        '在不动产中介找房子',
+        '水管漏水叫修理工',
+        '去入管局更新签证'
       ]
     }
   },
   {
     id: 'work_school',
-    name: { en: 'Work & School', zh: '职场校园' },
+    name: {
+      en: 'Work & School',
+      zh: '职场校园'
+    },
     icon: 'Briefcase',
     presets: {
       en: [
-        'Introducing yourself to a team',
-        'Asking a professor for help',
-        'Calling in sick',
-        'Exchanging contact info',
+        'First day self-introduction',
+        'Asking a professor a question',
+        'Calling in sick to work',
+        'Business card exchange',
         'Rescheduling a meeting',
-        'Apologizing for a late task',
-        'Inviting a colleague for lunch',
-        'Asking how to use equipment',
-        'Making a short presentation',
-        'Attending a company social',
-        'Job interview conversation',
+        'Apologizing for a mistake',
+        'Inviting a colleague to lunch',
+        'Asking how to use the office printer',
+        'Making a presentation',
+        'Attending a Nomikai (Drinking party)',
+        'Part-time job interview',
         'Asking for a deadline extension'
       ],
       zh: [
-        '向团队做自我介绍',
+        '入职第一天自我介绍',
         '向教授请教问题',
         '打电话请病假',
-        '交换联系方式',
-        '改约会议时间',
-        '为延误任务道歉',
-        '邀请同事吃午餐',
-        '询问设备怎么使用',
-        '做简短工作演示',
-        '参加公司聚会',
-        '面试时的对话',
-        '申请延长截止日期'
+        '交换名片',
+        '重新安排会议时间',
+        '为工作失误道歉',
+        '邀请同事一起吃午饭',
+        '询问办公室打印机怎么用',
+        '做PPT演示汇报',
+        '参加职场聚餐（Nomikai）',
+        '兼职打工面试',
+        '申请延长作业/任务截止日期'
       ]
     }
   }
@@ -213,13 +158,15 @@ export const CATEGORIES: Category[] = [
 
 export const UI_TEXT = {
   zh: {
-    titlePrefix: '我想练习',
-    titleSuffix: '',
-    subtitle: '选择一个具体的生活场景，掌握地道的口语表达。',
+    // 首页中间的大标题 (Position 1)
+    title: '用生活场景练出口语',
+    // 首页中间的副标题 (Position 2)
+    subtitle: '选择一个具体的生活场景，掌握地道的日语表达。',
+    // 顶部导航栏的 APP 名称
     navTitle: 'Saynario',
-    learning: '学习语言',
+    
     customLabel: '您想去哪里？',
-    customPlaceholder: '例如：在市政大厅办理业务...',
+    customPlaceholder: '例如：在派出所挂失...',
     start: '开始',
     vocab: '核心词汇',
     expressions: '常用表达',
@@ -262,7 +209,7 @@ export const UI_TEXT = {
     generatingPDF: '正在生成...',
     shuffle: '换一批',
     notation: '发音显示',
-    kana: '拼音/注音',
+    kana: '平假名',
     romaji: '罗马音',
     downloadAudio: '下载音频',
     generatingAudio: '合成音频中...',
@@ -280,6 +227,8 @@ export const UI_TEXT = {
     loadMore: '获取更多',
     loadingMore: '正在获取...',
     maxLoaded: '已全部加载',
+    
+    // Dialogue specific
     scene: '场景',
     writingScene: '正在编写场景...',
     writingDesc: 'AI 正在根据上下文创作地道的对话内容...',
@@ -288,13 +237,15 @@ export const UI_TEXT = {
     retrySection: '重新生成此段落'
   },
   en: {
-    titlePrefix: 'I want to practice',
-    titleSuffix: '',
+    // Home Page Main Title (Position 1)
+    title: 'Scene-based speaking for real-life language',
+    // Home Page Subtitle (Position 2)
     subtitle: 'Select a real-life scenario to master vocabulary and conversation.',
+    // Navbar App Name
     navTitle: 'Saynario',
-    learning: 'Learning',
+
     customLabel: 'Where do you want to go today?',
-    customPlaceholder: 'e.g., Handling business at the city hall...',
+    customPlaceholder: 'e.g., Returning a lost item at the police station...',
     start: 'Start',
     vocab: 'Vocabulary',
     expressions: 'Expressions',
@@ -337,7 +288,7 @@ export const UI_TEXT = {
     generatingPDF: 'Generating...',
     shuffle: 'Shuffle',
     notation: 'Notation',
-    kana: 'Phonetic',
+    kana: 'Kana',
     romaji: 'Romaji',
     downloadAudio: 'Download Audio',
     generatingAudio: 'Generating Audio...',
@@ -355,6 +306,8 @@ export const UI_TEXT = {
     loadMore: 'Get More',
     loadingMore: 'Loading...',
     maxLoaded: 'All Loaded',
+
+    // Dialogue specific
     scene: 'Scene',
     writingScene: 'Writing Scene...',
     writingDesc: 'The AI is composing a realistic dialogue for this specific part...',

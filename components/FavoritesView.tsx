@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { SavedItem, Language, VocabularyItem, ExpressionItem, Notation, VoiceEngine, LearningLanguage } from '../types';
+import { SavedItem, Language, VocabularyItem, ExpressionItem, Notation, VoiceEngine } from '../types';
 import { VocabularyList } from './VocabularyList';
 import { ChevronLeft, Star } from 'lucide-react';
 import { UI_TEXT } from '../constants';
@@ -12,7 +12,6 @@ interface FavoritesViewProps {
   onToggleSave: (item: SavedItem) => void;
   notation: Notation;
   voiceEngine?: VoiceEngine;
-  targetLanguage: LearningLanguage;
 }
 
 export const FavoritesView: React.FC<FavoritesViewProps> = ({ 
@@ -21,16 +20,12 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
   language, 
   onToggleSave, 
   notation,
-  voiceEngine = 'system',
-  targetLanguage
+  voiceEngine = 'system'
 }) => {
   const t = UI_TEXT[language];
 
-  // Filter items by current target language to ensure type safety and TTS correctness
-  const filteredItems = savedItems.filter(i => i.targetLanguage === targetLanguage);
-
-  const vocabItems = filteredItems.filter(i => i.type === 'vocab').map(i => i.content as VocabularyItem);
-  const exprItems = filteredItems.filter(i => i.type === 'expression').map(i => i.content as ExpressionItem);
+  const vocabItems = savedItems.filter(i => i.type === 'vocab').map(i => i.content as VocabularyItem);
+  const exprItems = savedItems.filter(i => i.type === 'expression').map(i => i.content as ExpressionItem);
 
   return (
     <div className="flex flex-col h-full w-full">
@@ -53,7 +48,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
 
       <div className="flex-1 overflow-y-auto no-scrollbar pb-10 w-full">
         <div className="max-w-4xl mx-auto px-4">
-          {filteredItems.length === 0 ? (
+          {savedItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-slate-400">
               <Star className="w-12 h-12 mb-4 opacity-20" />
               <p>{t.noFavorites}</p>
@@ -71,7 +66,6 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
                     notation={notation} 
                     language={language}
                     voiceEngine={voiceEngine}
-                    targetLanguage={targetLanguage}
                   />
                 </div>
               )}
@@ -86,7 +80,6 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
                     notation={notation} 
                     language={language}
                     voiceEngine={voiceEngine}
-                    targetLanguage={targetLanguage}
                   />
                 </div>
               )}

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { ScenarioContent, Language, SavedItem, Notation, VoiceEngine } from '../types';
-import { BookOpen, MessageCircle, GraduationCap, ChevronLeft, Download, Share2, Copy, Check, Loader2, ChevronDown, Trash2 } from 'lucide-react';
+import { BookOpen, MessageCircle, GraduationCap, ChevronLeft, RotateCw, Clock, Download, Share2, Copy, Check, Loader2, ChevronDown, Trash2 } from 'lucide-react';
 import { VocabularyList } from './VocabularyList';
 import { DialoguePlayer } from './DialoguePlayer';
 import { UI_TEXT } from '../constants';
@@ -281,6 +281,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
             </div>
             
             <div className="flex items-center gap-2 ml-12 md:ml-0 flex-wrap">
+               {/* VERSION SELECTOR REMOVED */}
+               
                <button
                  onClick={onDeleteVersion}
                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
@@ -379,7 +381,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
               onRetry={() => handleRetrySpecific('vocab')}
               onLoadMore={() => handleLoadMore('vocab')}
               canLoadMore={vocabLoadCount < MAX_LOAD_MORE}
-              targetLanguage={content.targetLanguage}
             />
           )}
           
@@ -395,7 +396,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
               onRetry={() => handleRetrySpecific('expression')}
               onLoadMore={() => handleLoadMore('expression')}
               canLoadMore={expressionLoadCount < MAX_LOAD_MORE}
-              targetLanguage={content.targetLanguage}
             />
           )}
 
