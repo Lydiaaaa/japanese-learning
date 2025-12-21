@@ -136,19 +136,16 @@ export default function App() {
   }, [savedItems, scenarioHistory, user, isSyncing, language, targetLanguage, notation, voiceEngine]);
 
   const executeScenarioGeneration = async (scenarioName: string) => {
-    // 1. Check for Custom Key
     const customKey = localStorage.getItem('nihongo_api_key');
-    // 2. Check for Free Mode Flag
     const isFreeMode = localStorage.getItem('nihongo_api_mode') === 'free';
-    // 3. Check Admin Status
     const isAdmin = checkIsAdmin(user);
 
-    // FIX: Relaxed validation. We trust the flag or admin status to break the UI loop.
-    // If the actual API Key (process.env.API_KEY) is missing later, the API call will fail and show an error,
-    // which is better than an infinite loop in the UI.
-    const isValidConfig = customKey || isFreeMode || isAdmin;
+    // Basic config check. 
+    // If no config exists, prompt user. 
+    // If config exists (even 'free' mode), proceed and let Service handle the actual key validation.
+    const hasConfig = customKey || isFreeMode || isAdmin;
 
-    if (!isValidConfig) {
+    if (!hasConfig) {
         setLoadingScenarioName(scenarioName);
         setShowApiKeyModal(true);
         return;
@@ -198,10 +195,16 @@ export default function App() {
       );
     } catch (err: any) {
       console.error(err);
-      if (err.message?.includes('API Key') || err.message?.includes('403')) {
+      
+      // CRITICAL FIX: 
+      // Only re-open modal automatically if it's a 403/Quota error.
+      // If it's "API Key is missing", it means the System Key is missing in Free Mode.
+      // We should NOT auto-open modal (loop), but show the Error Screen with instructions.
+      if (err.message?.includes('403') || err.message?.includes('quota')) {
           localStorage.removeItem('nihongo_api_mode'); 
           setShowApiKeyModal(true);
       }
+      
       setErrorMsg(err.message || t.errorDesc);
       setViewState(ViewState.ERROR);
     } finally { setIsGeneratingDialogues(false); }
@@ -260,9 +263,9 @@ export default function App() {
       }
       setShowApiKeyModal(false);
       
-      // Delay slightly to ensure state propagation before retry
+      // Try again if we were interrupted
       if (loadingScenarioName && viewState !== ViewState.GENERATING) {
-          setTimeout(() => executeScenarioGeneration(loadingScenarioName), 50);
+          setTimeout(() => executeScenarioGeneration(loadingScenarioName), 100);
       }
   };
 
@@ -413,23 +416,42 @@ export default function App() {
               <AlertTriangle className="w-8 h-8" />
             </div>
             <h2 className="text-2xl font-bold text-slate-800 mb-2">{t.errorTitle}</h2>
-            <p className="text-slate-500 max-w-md mb-8">{errorMsg || t.errorDesc}</p>
-            <div className="flex gap-4">
+            <p className="text-slate-500 max-w-md mb-8">
+              {errorMsg}
+              {errorMsg?.includes('API Key') && (
+                <span className="block mt-2 text-xs bg-slate-100 p-2 rounded text-slate-600">
+                  System API Key not found. Please use a Custom Key.
+                </span>
+              )}
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4">
               <button 
                 onClick={() => setViewState(ViewState.HOME)}
                 className="px-6 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-colors"
               >
                 {t.goHome}
               </button>
-              <button 
-                onClick={() => {
-                   executeScenarioGeneration(loadingScenarioName);
-                }}
-                className="px-6 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center gap-2"
-              >
-                <RefreshCw className="w-4 h-4" />
-                {t.tryAgain}
-              </button>
+              
+              {/* Show explicit Settings button if key is missing */}
+              {errorMsg?.includes('API Key') ? (
+                <button 
+                  onClick={() => setShowApiKeyModal(true)}
+                  className="px-6 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center gap-2"
+                >
+                  <Key className="w-4 h-4" />
+                  Configure API Key
+                </button>
+              ) : (
+                <button 
+                  onClick={() => {
+                     executeScenarioGeneration(loadingScenarioName);
+                  }}
+                  className="px-6 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  {t.tryAgain}
+                </button>
+              )}
             </div>
           </div>
         )}

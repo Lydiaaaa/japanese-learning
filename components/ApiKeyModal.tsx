@@ -18,7 +18,6 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   language,
   isQuotaExceeded
 }) => {
-  // Default to 'custom' if quota exceeded, otherwise 'free'
   const [mode, setMode] = useState<'free' | 'custom'>(isQuotaExceeded ? 'custom' : 'free');
   const [apiKey, setApiKey] = useState('');
   
@@ -41,37 +40,34 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-all">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
         
-        {/* Header Section */}
-        <div className={`relative px-6 py-8 ${isQuotaExceeded ? 'bg-red-500' : 'bg-indigo-600'} text-white`}>
+        {/* Header Section - Explicit styling for better contrast */}
+        <div className={`relative px-6 py-8 flex items-start gap-5 ${isQuotaExceeded ? 'bg-red-600' : 'bg-indigo-600'}`}>
           <button 
             onClick={onClose}
-            className="absolute top-4 right-4 p-1 rounded-full hover:bg-white/20 transition-colors text-white/70 hover:text-white"
+            className="absolute top-4 right-4 p-1.5 rounded-full bg-black/10 hover:bg-black/20 text-white transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
 
-          <div className="flex items-start gap-5">
-            <div className="p-3 rounded-xl bg-white/20 backdrop-blur-md shadow-inner flex-shrink-0">
-              {isQuotaExceeded ? <ShieldAlert className="w-8 h-8 text-white" /> : <Key className="w-8 h-8 text-white" />}
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-white mb-2 leading-tight">
-                {isQuotaExceeded 
-                  ? (isZh ? '今日免费额度已用完' : 'Daily Free Quota Exceeded') 
-                  : (isZh ? 'API 设置' : 'API Configuration')}
-              </h2>
-              {/* Force white/80 color to ensure visibility against indigo/red background */}
-              <p className="text-sm text-white/90 leading-relaxed font-medium">
-                {isQuotaExceeded
-                  ? (isZh ? '请使用您自己的 API Key 继续生成。' : 'Please use your own API Key to continue.')
-                  : (isZh ? '请选择您希望如何使用生成功能。' : 'Choose how you want to generate content.')}
-              </p>
-            </div>
+          <div className="p-3 rounded-xl bg-white/20 backdrop-blur-md shadow-inner flex-shrink-0">
+             {isQuotaExceeded ? <ShieldAlert className="w-8 h-8 text-white" /> : <Key className="w-8 h-8 text-white" />}
+          </div>
+          <div className="text-white">
+            <h2 className="text-xl font-bold mb-2 leading-tight">
+              {isQuotaExceeded 
+                ? (isZh ? '今日免费额度已用完' : 'Quota Exceeded') 
+                : (isZh ? 'API 设置' : 'API Configuration')}
+            </h2>
+            <p className="text-sm opacity-90 leading-relaxed font-medium">
+              {isQuotaExceeded
+                ? (isZh ? '请使用您自己的 API Key 继续生成。' : 'Please use your own API Key to continue.')
+                : (isZh ? '请选择您希望如何使用生成功能。' : 'Choose how you want to generate content.')}
+            </p>
           </div>
         </div>
 
         {/* Body Section */}
-        <div className="p-6 bg-white">
+        <div className="p-6 bg-white text-slate-900">
           <div className="space-y-4 mb-6">
             {/* Free Option */}
             <button
@@ -80,9 +76,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               disabled={isQuotaExceeded}
               className={`w-full p-4 rounded-xl border-2 text-left transition-all relative flex items-start gap-3 ${
                 mode === 'free' 
-                  ? 'border-indigo-600 bg-indigo-50/50' 
+                  ? 'border-indigo-600 bg-indigo-50' 
                   : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'
-              } ${isQuotaExceeded ? 'opacity-40 cursor-not-allowed grayscale' : ''}`}
+              } ${isQuotaExceeded ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
             >
               <div className={`mt-0.5 p-1.5 rounded-lg ${mode === 'free' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
                 <Zap className="w-5 h-5" />
@@ -93,7 +89,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   {mode === 'free' && <Check className="w-5 h-5 text-indigo-600 bg-indigo-100 rounded-full p-0.5" />}
                 </div>
                 <p className="text-sm text-slate-500 mt-1">
-                  {isZh ? '无需配置。每天限制生成 5 次。' : 'No setup required. Limited to 5 generations per day.'}
+                  {isZh ? '无需配置。每天限制生成 5 次。' : 'Limited to 5 generations per day.'}
                 </p>
               </div>
             </button>
@@ -104,7 +100,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               onClick={() => setMode('custom')}
               className={`w-full p-4 rounded-xl border-2 text-left transition-all relative flex items-start gap-3 ${
                 mode === 'custom' 
-                  ? 'border-indigo-600 bg-indigo-50/50' 
+                  ? 'border-indigo-600 bg-indigo-50' 
                   : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'
               }`}
             >
@@ -117,7 +113,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                    {mode === 'custom' && <Check className="w-5 h-5 text-indigo-600 bg-indigo-100 rounded-full p-0.5" />}
                 </div>
                 <p className="text-sm text-slate-500 mt-1 mb-3">
-                  {isZh ? '使用您自己的 Google Gemini API Key。无限制。' : 'Use your own Google Gemini API Key. Unlimited.'}
+                  {isZh ? '使用您自己的 Google Gemini API Key。' : 'Use your own Google Gemini API Key.'}
                 </p>
                 
                 {mode === 'custom' && (
@@ -160,16 +156,12 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               onClick={handleSubmit}
               disabled={mode === 'custom' && apiKey.length < 10}
               className={`flex-1 px-4 py-3 rounded-xl text-white font-bold transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center gap-2 ${
-                  isQuotaExceeded ? 'bg-red-500 hover:bg-red-600 shadow-red-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
+                  isQuotaExceeded ? 'bg-red-600 hover:bg-red-700 shadow-red-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
               }`}
             >
               {isZh ? '确认' : 'Confirm'}
             </button>
           </div>
-          
-          <p className="text-center text-xs text-slate-400 mt-6">
-            {isZh ? '您可以在设置菜单中随时修改此选项。' : 'You can change this anytime in the settings menu.'}
-          </p>
         </div>
       </div>
     </div>
