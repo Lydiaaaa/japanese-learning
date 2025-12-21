@@ -18,6 +18,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   language,
   isQuotaExceeded
 }) => {
+  // Default to 'custom' if quota exceeded, otherwise 'free'
   const [mode, setMode] = useState<'free' | 'custom'>(isQuotaExceeded ? 'custom' : 'free');
   const [apiKey, setApiKey] = useState('');
   
@@ -125,7 +126,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
                       placeholder="AIzaSy..."
-                      className="w-full p-3 text-sm border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white font-mono"
+                      className="w-full p-3 text-sm border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white font-mono text-slate-900"
                       autoFocus
                     />
                     <div className="flex justify-end mt-2">

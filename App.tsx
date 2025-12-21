@@ -77,10 +77,8 @@ export default function App() {
       const savedEngine = localStorage.getItem('nihongo_voice_engine');
       if (savedEngine) setVoiceEngine(savedEngine as VoiceEngine);
       
-      // Check API Key
-      if (!process.env.API_KEY && !localStorage.getItem('nihongo_api_key')) {
-         setShowApiKeyModal(true);
-      }
+      // We do NOT aggressively check API key on mount anymore, 
+      // we check it when the user actually tries to perform an action.
     } catch (e) { console.error(e); }
   }, []);
 
@@ -89,6 +87,13 @@ export default function App() {
     const unsubscribe = subscribeToAuth(async (authUser) => {
       setUser(authUser);
       
+      // Auto-set free mode for admins if no key is present
+      if (checkIsAdmin(authUser)) {
+          if (!localStorage.getItem('nihongo_api_key')) {
+              localStorage.setItem('nihongo_api_mode', 'free');
+          }
+      }
+
       // If user is logged in, try to sync local data with cloud
       if (authUser && authUser.uid !== GUEST_ID) {
         try {
@@ -141,10 +146,24 @@ export default function App() {
     localStorage.setItem('nihongo_voice_engine', voiceEngine);
   }, [savedItems, scenarioHistory, user, isSyncing, language, targetLanguage, notation, voiceEngine]);
 
-  // Handle Scenario Generation without manual API key management
+  // Handle Scenario Generation with Robust API Key Checking
   const executeScenarioGeneration = async (scenarioName: string) => {
-    // Check key before starting
-    if (!process.env.API_KEY && !localStorage.getItem('nihongo_api_key')) {
+    // 1. Check for Custom Key
+    const customKey = localStorage.getItem('nihongo_api_key');
+    // 2. Check for Free Mode Flag
+    const isFreeMode = localStorage.getItem('nihongo_api_mode') === 'free';
+    // 3. Check Environment Key (Fallback for dev/free mode)
+    const hasEnvKey = !!process.env.API_KEY;
+
+    // Logic: 
+    // If we have a custom key -> Good.
+    // If we have Free Mode set AND an Env Key exists -> Good.
+    // Otherwise -> Prompt user.
+    
+    const isValidConfig = customKey || (isFreeMode && hasEnvKey);
+
+    if (!isValidConfig) {
+        setLoadingScenarioName(scenarioName); // Remember what they wanted to do
         setShowApiKeyModal(true);
         return;
     }
@@ -193,6 +212,11 @@ export default function App() {
       );
     } catch (err: any) {
       console.error(err);
+      // If error is 403/401 related to key, show modal again
+      if (err.message?.includes('API Key') || err.message?.includes('403')) {
+          localStorage.removeItem('nihongo_api_mode'); // Reset free mode if it failed
+          setShowApiKeyModal(true);
+      }
       setErrorMsg(err.message || t.errorDesc);
       setViewState(ViewState.ERROR);
     } finally { setIsGeneratingDialogues(false); }
@@ -241,6 +265,25 @@ export default function App() {
     window.history.replaceState({}, '', window.location.pathname);
   };
 
+  const handleApiKeyConfirm = (key: string | null) => {
+      if (key) {
+          // User provided a custom key
+          localStorage.setItem('nihongo_api_key', key);
+          localStorage.setItem('nihongo_api_mode', 'custom');
+      } else {
+          // User selected free mode
+          localStorage.setItem('nihongo_api_mode', 'free');
+          // Clear any old custom key to avoid confusion
+          localStorage.removeItem('nihongo_api_key');
+      }
+      setShowApiKeyModal(false);
+      
+      // If we were waiting to load a scenario, try again
+      if (loadingScenarioName && viewState !== ViewState.GENERATING) {
+          executeScenarioGeneration(loadingScenarioName);
+      }
+  };
+
   return (
     <div className="h-screen flex flex-col bg-slate-50 text-slate-900 font-sans overflow-hidden">
       <ApiKeyModal 
@@ -248,10 +291,7 @@ export default function App() {
         onClose={() => setShowApiKeyModal(false)}
         language={language}
         isQuotaExceeded={false}
-        onConfirm={(key) => {
-            if (key) localStorage.setItem('nihongo_api_key', key);
-            setShowApiKeyModal(false);
-        }}
+        onConfirm={handleApiKeyConfirm}
       />
 
       <nav className="bg-white border-b border-slate-100 px-4 md:px-6 py-4 flex justify-between items-center z-10 shadow-sm flex-shrink-0">
@@ -401,11 +441,7 @@ export default function App() {
               </button>
               <button 
                 onClick={() => {
-                  if (!process.env.API_KEY && !localStorage.getItem('nihongo_api_key')) {
-                    setShowApiKeyModal(true);
-                  } else {
-                    executeScenarioGeneration(loadingScenarioName);
-                  }
+                   executeScenarioGeneration(loadingScenarioName);
                 }}
                 className="px-6 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center gap-2"
               >
