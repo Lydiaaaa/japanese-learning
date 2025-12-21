@@ -8,7 +8,7 @@ import { UserMenu } from './components/UserMenu';
 import { ViewState, ScenarioContent, Language, LearningLanguage, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine, DialogueSection } from './types';
 import { generateVocabularyAndExpressions, generateDialoguesWithCallback, generateMoreItems, regenerateSection, regenerateSingleDialogue, generateCustomScene } from './services/geminiService';
 import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario, User, checkIsAdmin } from './services/firebase';
-import { Loader2, Globe, Star, Settings, Type, Zap } from 'lucide-react';
+import { Loader2, Globe, Star, Settings, Type, Zap, AlertTriangle, RefreshCw } from 'lucide-react';
 import { UI_TEXT, LEARNING_LANGUAGES } from './constants';
 import { SaynarioLogo } from './components/Logo';
 
@@ -76,7 +76,7 @@ export default function App() {
     } catch (e) { console.error(e); }
   }, []);
 
-  // Auth Subscription & Sync Logic (FIXED: This was missing)
+  // Auth Subscription & Sync Logic
   useEffect(() => {
     const unsubscribe = subscribeToAuth(async (authUser) => {
       setUser(authUser);
@@ -85,7 +85,6 @@ export default function App() {
       if (authUser && authUser.uid !== GUEST_ID) {
         try {
             // Read directly from localStorage to ensure we have the latest data before sync
-            // (State variables might be empty on initial mount)
             const localFavs = JSON.parse(localStorage.getItem('nihongo_favorites') || '[]');
             const localHist = JSON.parse(localStorage.getItem('nihongo_scenarios') || '[]');
             
@@ -103,7 +102,6 @@ export default function App() {
         }
       }
       
-      // Crucial: Turn off loading state
       setIsSyncing(false);
     });
     return () => unsubscribe();
@@ -119,12 +117,16 @@ export default function App() {
 
   useEffect(() => {
     if (isSyncing) return; 
+    
+    // Always save to localStorage as backup/offline cache
+    localStorage.setItem('nihongo_favorites', JSON.stringify(savedItems));
+    localStorage.setItem('nihongo_scenarios', JSON.stringify(scenarioHistory));
+    
+    // If logged in, also try to save to cloud
     if (user && user.uid !== GUEST_ID) {
       saveUserData(user.uid, { favorites: savedItems, history: scenarioHistory });
-    } else {
-      localStorage.setItem('nihongo_favorites', JSON.stringify(savedItems));
-      localStorage.setItem('nihongo_scenarios', JSON.stringify(scenarioHistory));
     }
+
     localStorage.setItem('nihongo_language', language);
     localStorage.setItem('nihongo_target_language', targetLanguage);
     localStorage.setItem('nihongo_notation', notation);
@@ -337,7 +339,7 @@ export default function App() {
         )}
         {viewState === ViewState.HISTORY && (
           <ScenariosListView 
-            history={scenarioHistory}
+            history={scenarioHistory.filter(h => h.targetLanguage === targetLanguage)}
             onBack={() => setViewState(ViewState.HOME)}
             onSelect={item => {
               setCurrentScenarioId(item.id);
@@ -351,6 +353,30 @@ export default function App() {
             }}
             language={language}
           />
+        )}
+        {viewState === ViewState.ERROR && (
+          <div className="flex flex-col items-center justify-center h-full text-center px-6">
+            <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">{t.errorTitle}</h2>
+            <p className="text-slate-500 max-w-md mb-8">{errorMsg || t.errorDesc}</p>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setViewState(ViewState.HOME)}
+                className="px-6 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-colors"
+              >
+                {t.goHome}
+              </button>
+              <button 
+                onClick={() => executeScenarioGeneration(loadingScenarioName)}
+                className="px-6 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                {t.tryAgain}
+              </button>
+            </div>
+          </div>
         )}
       </main>
     </div>
