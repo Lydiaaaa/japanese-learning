@@ -55,38 +55,69 @@ export default function App() {
   // Data State
   const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
   const [scenarioHistory, setScenarioHistory] = useState<ScenarioHistoryItem[]>([]);
+  
+  // DATA PROTECTION STATE
+  const [isLocalLoaded, setIsLocalLoaded] = useState(false);
+  
+  // Refs to hold latest state for async callbacks to prevent stale closures
+  const savedItemsRef = useRef(savedItems);
+  const historyRef = useRef(scenarioHistory);
 
   const t = UI_TEXT[language];
 
-  // Initialize Local Data
+  // Keep refs in sync with state
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('nihongo_favorites');
-      if (saved) setSavedItems(JSON.parse(saved));
-      
-      const history = localStorage.getItem('nihongo_scenarios');
-      if (history) setScenarioHistory(JSON.parse(history));
+    savedItemsRef.current = savedItems;
+  }, [savedItems]);
 
-      const savedNotation = localStorage.getItem('nihongo_notation');
-      if (savedNotation === 'kana' || savedNotation === 'romaji') {
-        setNotation(savedNotation);
+  useEffect(() => {
+    historyRef.current = scenarioHistory;
+  }, [scenarioHistory]);
+
+  // Initialize Local Data - SAFELY
+  useEffect(() => {
+    const loadData = () => {
+      try {
+        const saved = localStorage.getItem('nihongo_favorites');
+        if (saved) {
+           const parsed = JSON.parse(saved);
+           setSavedItems(parsed);
+           savedItemsRef.current = parsed; // Update ref immediately
+        }
+        
+        const history = localStorage.getItem('nihongo_scenarios');
+        if (history) {
+           const parsed = JSON.parse(history);
+           setScenarioHistory(parsed);
+           historyRef.current = parsed; // Update ref immediately
+        }
+
+        const savedNotation = localStorage.getItem('nihongo_notation');
+        if (savedNotation === 'kana' || savedNotation === 'romaji') {
+          setNotation(savedNotation);
+        }
+        
+        const savedEngine = localStorage.getItem('nihongo_voice_engine');
+        if (savedEngine === 'system' || savedEngine === 'ai') {
+          setVoiceEngine(savedEngine);
+        }
+
+        // Load API Key Preference
+        const storedKey = localStorage.getItem('nihongo_api_key');
+        const storedPref = localStorage.getItem('nihongo_api_pref_set');
+        
+        if (storedKey) setCustomApiKey(storedKey);
+        if (storedPref === 'true') setHasSetApiPreference(true);
+
+      } catch (e) {
+        console.error("Failed to load local storage", e);
+      } finally {
+        // CRITICAL: Signal that local data is loaded
+        setIsLocalLoaded(true);
       }
-      
-      const savedEngine = localStorage.getItem('nihongo_voice_engine');
-      if (savedEngine === 'system' || savedEngine === 'ai') {
-        setVoiceEngine(savedEngine);
-      }
+    };
 
-      // Load API Key Preference
-      const storedKey = localStorage.getItem('nihongo_api_key');
-      const storedPref = localStorage.getItem('nihongo_api_pref_set');
-      
-      if (storedKey) setCustomApiKey(storedKey);
-      if (storedPref === 'true') setHasSetApiPreference(true);
-
-    } catch (e) {
-      console.error("Failed to load local storage", e);
-    }
+    loadData();
   }, []);
 
   // Click outside to close settings
@@ -155,7 +186,10 @@ export default function App() {
   }, [t.shareError]);
 
   // Auth Subscription
+  // IMPORTANT: Only subscribe AFTER local data is loaded to prevent overwriting with empty state
   useEffect(() => {
+    if (!isLocalLoaded) return;
+
     const unsubscribe = subscribeToAuth(async (currentUser) => {
       if (user?.uid === GUEST_ID && !currentUser) {
         setIsSyncing(false);
@@ -164,9 +198,11 @@ export default function App() {
       setUser(currentUser);
       if (currentUser) {
         setIsSyncing(true);
+        // Use Refs here to get "current" local data at the moment of login
+        // This fixes the race condition where auth callback might have stale empty arrays
         const syncedData = await syncUserData(currentUser.uid, {
-          favorites: savedItems,
-          history: scenarioHistory
+          favorites: savedItemsRef.current,
+          history: historyRef.current
         });
         if (syncedData) {
           setSavedItems(syncedData.favorites);
@@ -178,11 +214,13 @@ export default function App() {
       }
     });
     return () => unsubscribe();
-  }, []); 
+  }, [isLocalLoaded]); 
 
   // Persistence
   useEffect(() => {
-    if (isSyncing) return; 
+    // CRITICAL GUARD: Never save if local storage hasn't finished loading yet.
+    // This prevents wiping out existing localStorage with initial empty arrays.
+    if (!isLocalLoaded || isSyncing) return; 
 
     if (user && user.uid !== GUEST_ID) {
       saveUserData(user.uid, { favorites: savedItems, history: scenarioHistory });
@@ -195,7 +233,7 @@ export default function App() {
     localStorage.setItem('nihongo_notation', notation);
     localStorage.setItem('nihongo_voice_engine', voiceEngine);
 
-  }, [savedItems, scenarioHistory, user, isSyncing, language, notation, voiceEngine]);
+  }, [savedItems, scenarioHistory, user, isSyncing, language, notation, voiceEngine, isLocalLoaded]);
 
   const toggleSavedItem = (item: SavedItem) => {
     setSavedItems(prev => {
