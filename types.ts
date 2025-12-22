@@ -1,5 +1,7 @@
 
-export type Language = 'zh' | 'en';
+export type Language = 'zh' | 'en'; // UI / Native Language
+export type TargetLanguage = 'zh' | 'en' | 'ja' | 'ko' | 'es' | 'fr' | 'de'; // Language being learned
+
 export type Notation = 'kana' | 'romaji';
 export type VoiceEngine = 'system' | 'ai';
 
@@ -7,8 +9,8 @@ export type ProgressCallback = (completed: number, total: number) => void;
 
 export interface VocabularyItem {
   term: string;
-  kana: string;
-  romaji: string;
+  kana: string; // Used for Kana (JA), Hangul (KO), or empty for others
+  romaji: string; // Used for Romaji (JA), Pinyin (ZH), Romanization (KO), or empty
   meaning: string | { en: string; zh: string }; 
   type: string; 
 }
@@ -24,7 +26,7 @@ export interface ExpressionItem {
 export interface DialogueLine {
   speaker: 'A' | 'B';
   roleName?: string; 
-  japanese: string;
+  japanese: string; // The text in Target Language (kept key name 'japanese' for backward compat, but holds any lang)
   kana: string;
   romaji: string;
   translation: string | { en: string; zh: string }; 
@@ -37,10 +39,10 @@ export interface DialogueSection {
 
 export interface ScenarioContent {
   scenarioName: string;
+  targetLanguage?: TargetLanguage; // New field
   vocabulary: VocabularyItem[];
   expressions: ExpressionItem[];
   dialogues: DialogueSection[];
-  // New: Store roles persistantly to ensure custom scenes use the same characters
   roles?: { user: string; partner: string };
   timestamp?: number; 
 }
@@ -68,8 +70,6 @@ export interface SavedItem {
 export interface ScenarioHistoryItem {
   id: string; 
   name: string;
-  // We keep 'versions' for backward compatibility with existing localstorage data,
-  // but the app will now logically treat versions[0] as the single source of truth.
   versions: ScenarioContent[]; 
   lastAccessed: number;
 }

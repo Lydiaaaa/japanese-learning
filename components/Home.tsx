@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { CATEGORIES, UI_TEXT } from '../constants';
-import { ArrowRight, Building, Plane, Utensils, Briefcase, Search, History, RefreshCw } from 'lucide-react';
-import { Language } from '../types';
+
+import React, { useState, useEffect, useRef } from 'react';
+import { CATEGORIES, UI_TEXT, TARGET_LANGUAGES } from '../constants';
+import { ArrowRight, Building, Plane, Utensils, Briefcase, Search, History, RefreshCw, ChevronDown, Check } from 'lucide-react';
+import { Language, TargetLanguage } from '../types';
 
 interface HomeProps {
   onScenarioSelect: (scenario: string) => void;
   onViewHistory: () => void;
   language: Language;
+  targetLanguage: TargetLanguage;
+  onTargetLanguageChange: (lang: TargetLanguage) => void;
 }
 
 const iconMap: Record<string, React.ElementType> = {
@@ -16,10 +19,17 @@ const iconMap: Record<string, React.ElementType> = {
   Briefcase
 };
 
-export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, language }) => {
+export const Home: React.FC<HomeProps> = ({ 
+  onScenarioSelect, 
+  onViewHistory, 
+  language,
+  targetLanguage,
+  onTargetLanguageChange
+}) => {
   const [customInput, setCustomInput] = useState('');
-  // State to track which presets are currently visible for each category
   const [visiblePresets, setVisiblePresets] = useState<Record<string, string[]>>({});
+  const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
+  const langMenuRef = useRef<HTMLDivElement>(null);
   
   const t = UI_TEXT[language];
 
@@ -31,6 +41,17 @@ export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, lan
     });
     setVisiblePresets(defaults);
   }, [language]);
+
+  // Click outside to close language menu
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (langMenuRef.current && !langMenuRef.current.contains(event.target as Node)) {
+        setIsLangMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleCustomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,18 +86,58 @@ export const Home: React.FC<HomeProps> = ({ onScenarioSelect, onViewHistory, lan
     }));
   };
 
+  const currentLangObj = TARGET_LANGUAGES.find(l => l.code === targetLanguage) || TARGET_LANGUAGES[0];
+
   return (
     <div className="h-full overflow-y-auto no-scrollbar">
       <div className="max-w-4xl mx-auto p-4 md:p-6">
-        {/* HEADER SECTION: Fixed mt-16 (4rem) on desktop, and mt-10 for mobile */}
-        <header className="mb-8 md:mb-12 text-center mt-10 md:mt-16">
-          <h1 className="text-3xl md:text-4xl font-bold text-slate-800 mb-2">{t.title}</h1>
-          {/* OPTIMIZATION: Increased max-w to 2xl to prevent awkward line breaks on desktop in English */}
-          <p className="text-slate-500 text-base md:text-lg max-w-2xl mx-auto px-4 md:px-0">{t.subtitle}</p>
+        {/* HEADER SECTION - REFACTORED TO "MAD LIBS" STYLE */}
+        <header className="mb-6 md:mb-8 text-center mt-12 md:mt-24 mb-10">
+          <h1 className="text-4xl md:text-6xl font-black text-slate-900 tracking-tight flex flex-col md:flex-row items-center justify-center gap-2 md:gap-5 leading-tight">
+             <span className="whitespace-nowrap">{t.homeTitlePrefix}</span>
+             
+             {/* Styled Dropdown Trigger */}
+             <div className="relative inline-block" ref={langMenuRef}>
+               <button
+                 onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
+                 className="flex items-center gap-2 border-b-4 border-slate-900 pb-1 md:pb-2 hover:text-indigo-600 hover:border-indigo-600 transition-all cursor-pointer group"
+               >
+                 <span>{currentLangObj.name}</span>
+                 <ChevronDown className="w-8 h-8 md:w-10 md:h-10 stroke-[3] text-slate-400 group-hover:text-indigo-600 transition-colors" />
+               </button>
+
+               {isLangMenuOpen && (
+                 <div className="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-72 bg-white rounded-xl shadow-2xl border border-slate-100 py-2 z-50 max-h-80 overflow-y-auto text-base text-left [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-300">
+                    {TARGET_LANGUAGES.map(lang => (
+                      <button
+                        key={lang.code}
+                        onClick={() => {
+                          onTargetLanguageChange(lang.code);
+                          setIsLangMenuOpen(false);
+                        }}
+                        className="w-full text-left px-5 py-3 hover:bg-slate-50 flex items-center justify-between group transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{lang.flag}</span>
+                          <span className={`font-medium text-base ${targetLanguage === lang.code ? 'text-indigo-600 font-bold' : 'text-slate-700'}`}>
+                            {lang.name}
+                          </span>
+                        </div>
+                        {targetLanguage === lang.code && <Check className="w-4 h-4 text-indigo-600 stroke-[3]" />}
+                      </button>
+                    ))}
+                 </div>
+               )}
+             </div>
+          </h1>
+
+          <p className="text-slate-400 text-sm md:text-lg mt-6 max-w-lg mx-auto leading-relaxed font-medium">
+            {t.subtitle}
+          </p>
         </header>
 
         {/* Custom Input Hero */}
-        <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 mb-8 md:mb-10">
+        <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 mb-8 md:mb-10 mt-6 md:mt-10">
           <label className="block text-sm font-medium text-slate-700 mb-2">
             {t.customLabel}
           </label>

@@ -16,6 +16,7 @@ interface Props {
   onRetry?: () => Promise<void>;
   onLoadMore?: () => Promise<void>;
   canLoadMore?: boolean;
+  targetLanguage?: string; // Passed from parent to determine script display
 }
 
 const getMeaning = (meaning: string | { en: string; zh: string } | undefined, lang: Language) => {
@@ -34,12 +35,35 @@ export const VocabularyList: React.FC<Props> = ({
   voiceEngine = 'system',
   onRetry,
   onLoadMore,
-  canLoadMore = false
+  canLoadMore = false,
+  targetLanguage = 'ja'
 }) => {
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const t = UI_TEXT[language];
+
+  // Logic: Show subText if it's Japanese (always distinct), or for others if available
+  // For JA: Show Kana or Romaji based on toggle.
+  // For ZH: Show Pinyin (in romaji field).
+  // For KO: Show Romanization (in romaji field) or Hangul (kana field).
+  // For EN/ES/FR/DE: Usually hide unless romaji field has IPA? 
+  // Simplified: If romaji/kana is present, we show based on notation preference OR default.
+  
+  const showSubText = (kana: string, romaji: string) => {
+      // If target is JA, respect notation toggle
+      if (targetLanguage === 'ja') {
+          return notation === 'kana' ? kana : romaji;
+      }
+      // If target is ZH/KO, usually 'romaji' field holds Pinyin/Romanization. 
+      // We display that regardless of notation toggle, or maybe respect it?
+      // Let's just show 'romaji' field for ZH/KO as it holds the phonetic guide.
+      if (targetLanguage === 'zh' || targetLanguage === 'ko') {
+          return romaji || kana;
+      }
+      // For European languages, fields are likely empty, so return nothing.
+      return romaji || kana;
+  };
 
   // Safety guard for empty items
   if (!items || items.length === 0) {
@@ -77,7 +101,7 @@ export const VocabularyList: React.FC<Props> = ({
     try {
       // Get API Key from localStorage for TTS if available
       const customKey = localStorage.getItem('nihongo_api_key') || undefined;
-      await playTTS(text, 'Puck', voiceEngine as VoiceEngine, customKey);
+      await playTTS(text, 'Puck', voiceEngine as VoiceEngine, customKey, targetLanguage as any);
     } catch (err) {
       console.error("TTS Error", err);
     } finally {
@@ -119,7 +143,8 @@ export const VocabularyList: React.FC<Props> = ({
           
           const kana = isVocab ? (item as VocabularyItem).kana : (item as ExpressionItem).kana;
           const romaji = isVocab ? (item as VocabularyItem).romaji : (item as ExpressionItem).romaji;
-          const subText = notation === 'kana' ? kana : romaji;
+          
+          const subText = showSubText(kana, romaji);
           
           const meaning = getMeaning(item.meaning, language as Language);
           const tag = isVocab ? (item as VocabularyItem).type : null;

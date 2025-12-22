@@ -6,7 +6,7 @@ import { FavoritesView } from './components/FavoritesView';
 import { ScenariosListView } from './components/ScenariosListView';
 import { UserMenu } from './components/UserMenu';
 import { ApiKeyModal } from './components/ApiKeyModal';
-import { ViewState, ScenarioContent, Language, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine, DialogueSection } from './types';
+import { ViewState, ScenarioContent, Language, TargetLanguage, SavedItem, ScenarioHistoryItem, Notation, VoiceEngine, DialogueSection } from './types';
 import { generateVocabularyAndExpressions, generateDialoguesWithCallback, generateMoreItems, regenerateSection, regenerateSingleDialogue, generateCustomScene } from './services/geminiService';
 import { subscribeToAuth, syncUserData, saveUserData, GUEST_ID, getSharedScenario, User, checkDailyQuota, incrementDailyQuota, checkIsAdmin } from './services/firebase';
 import { Loader2, AlertCircle, RefreshCw, Globe, Star, Settings, Type, Zap, Key } from 'lucide-react';
@@ -37,6 +37,9 @@ export default function App() {
   
   // Global State with intelligent default
   const [language, setLanguage] = useState<Language>(getInitialLanguage());
+  // New State: Target Learning Language
+  const [targetLanguage, setTargetLanguage] = useState<TargetLanguage>('ja');
+
   const [notation, setNotation] = useState<Notation>('kana');
   const [voiceEngine, setVoiceEngine] = useState<VoiceEngine>('system');
   const [customApiKey, setCustomApiKey] = useState<string | null>(null);
@@ -44,7 +47,9 @@ export default function App() {
   
   // Auth State
   const [user, setUser] = useState<User | null>(null);
-  const [isSyncing, setIsSyncing] = useState(true); 
+  // FIX: Start as FALSE. This ensures that even if auth hangs or is blocked, 
+  // we default to "Guest Mode" immediately so local saving works.
+  const [isSyncing, setIsSyncing] = useState(false); 
 
   // UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -81,15 +86,19 @@ export default function App() {
         const saved = localStorage.getItem('nihongo_favorites');
         if (saved) {
            const parsed = JSON.parse(saved);
-           setSavedItems(parsed);
-           savedItemsRef.current = parsed; // Update ref immediately
+           if (Array.isArray(parsed)) {
+             setSavedItems(parsed);
+             savedItemsRef.current = parsed; 
+           }
         }
         
         const history = localStorage.getItem('nihongo_scenarios');
         if (history) {
            const parsed = JSON.parse(history);
-           setScenarioHistory(parsed);
-           historyRef.current = parsed; // Update ref immediately
+           if (Array.isArray(parsed)) {
+             setScenarioHistory(parsed);
+             historyRef.current = parsed; 
+           }
         }
 
         const savedNotation = localStorage.getItem('nihongo_notation');
@@ -102,6 +111,11 @@ export default function App() {
           setVoiceEngine(savedEngine);
         }
 
+        const savedTarget = localStorage.getItem('nihongo_target_language');
+        if (savedTarget) {
+            setTargetLanguage(savedTarget as TargetLanguage);
+        }
+
         // Load API Key Preference
         const storedKey = localStorage.getItem('nihongo_api_key');
         const storedPref = localStorage.getItem('nihongo_api_pref_set');
@@ -111,6 +125,7 @@ export default function App() {
 
       } catch (e) {
         console.error("Failed to load local storage", e);
+        // Do NOT wipe data on error, just proceed with defaults
       } finally {
         // CRITICAL: Signal that local data is loaded
         setIsLocalLoaded(true);
@@ -186,40 +201,43 @@ export default function App() {
   }, [t.shareError]);
 
   // Auth Subscription
-  // IMPORTANT: Only subscribe AFTER local data is loaded to prevent overwriting with empty state
+  // IMPORTANT: Only subscribe AFTER local data is loaded
   useEffect(() => {
     if (!isLocalLoaded) return;
 
     const unsubscribe = subscribeToAuth(async (currentUser) => {
-      if (user?.uid === GUEST_ID && !currentUser) {
+      // If user logs out or is null
+      if (!currentUser) {
+        setUser(null);
+        // Ensure syncing is off so local persistence works
         setIsSyncing(false);
         return;
       }
+
+      // User Logged In
       setUser(currentUser);
-      if (currentUser) {
-        setIsSyncing(true);
-        // Use Refs here to get "current" local data at the moment of login
-        // This fixes the race condition where auth callback might have stale empty arrays
-        const syncedData = await syncUserData(currentUser.uid, {
-          favorites: savedItemsRef.current,
-          history: historyRef.current
-        });
-        if (syncedData) {
-          setSavedItems(syncedData.favorites);
-          setScenarioHistory(syncedData.history);
-        }
-        setIsSyncing(false);
-      } else {
-        setIsSyncing(false);
+      setIsSyncing(true); // Temporarily block local persistence while merging
+      
+      // Merge Cloud + Local Data
+      const syncedData = await syncUserData(currentUser.uid, {
+        favorites: savedItemsRef.current,
+        history: historyRef.current
+      });
+      
+      if (syncedData) {
+        setSavedItems(syncedData.favorites);
+        setScenarioHistory(syncedData.history);
       }
+      
+      // Done syncing, resume standard persistence
+      setIsSyncing(false);
     });
     return () => unsubscribe();
   }, [isLocalLoaded]); 
 
   // Persistence
   useEffect(() => {
-    // CRITICAL GUARD: Never save if local storage hasn't finished loading yet.
-    // This prevents wiping out existing localStorage with initial empty arrays.
+    // CRITICAL GUARD: Never save if local storage hasn't finished loading yet OR if we are in the middle of a cloud sync.
     if (!isLocalLoaded || isSyncing) return; 
 
     if (user && user.uid !== GUEST_ID) {
@@ -232,8 +250,9 @@ export default function App() {
     localStorage.setItem('nihongo_language', language);
     localStorage.setItem('nihongo_notation', notation);
     localStorage.setItem('nihongo_voice_engine', voiceEngine);
+    localStorage.setItem('nihongo_target_language', targetLanguage);
 
-  }, [savedItems, scenarioHistory, user, isSyncing, language, notation, voiceEngine, isLocalLoaded]);
+  }, [savedItems, scenarioHistory, user, isSyncing, language, notation, voiceEngine, targetLanguage, isLocalLoaded]);
 
   const toggleSavedItem = (item: SavedItem) => {
     setSavedItems(prev => {
@@ -246,7 +265,7 @@ export default function App() {
   };
 
   const saveScenarioToHistory = (id: string, content: ScenarioContent) => {
-    // Safety check: remove undefined dialogues to prevent firestore crash
+    // Safety check: remove undefined dialogues
     const safeContent = {
         ...content,
         dialogues: content.dialogues.filter(Boolean)
@@ -259,9 +278,6 @@ export default function App() {
       const existingIndex = prev.findIndex(item => item.id === id);
       if (existingIndex >= 0) {
         const updated = [...prev];
-        // SINGLE VERSION STRATEGY: We now overwrite the versions array with just the latest one
-        // to conform to the new design, but we keep the structure for safety.
-        // Actually, let's just keep the single source of truth at index 0.
         const versions = [contentWithTime]; 
         updated[existingIndex] = {
           ...updated[existingIndex],
@@ -290,7 +306,6 @@ export default function App() {
 
   const handleDeleteVersion = () => {
     if (!confirm(t.confirmDeleteVersion)) return;
-    // With single version model, deleting the version means deleting the whole scenario history
     setScenarioHistory(prev => prev.filter(item => item.id !== currentScenarioId));
     setViewState(ViewState.HOME);
     setCurrentContent(null);
@@ -301,9 +316,11 @@ export default function App() {
   // --- NEW: Handle Load More Items (Incremental Append) ---
   const handleLoadMoreItems = async (type: 'vocab' | 'expression') => {
     if (!currentContent) return;
+    // Use stored target language or default to Japanese if missing in old data
+    const targetLang = currentContent.targetLanguage || 'ja';
 
     try {
-      // 1. Gather existing terms for de-duplication
+      // 1. Gather existing terms
       let existingTerms: string[] = [];
       if (type === 'vocab') {
          existingTerms = currentContent.vocabulary.map(v => v.term);
@@ -317,10 +334,11 @@ export default function App() {
         type,
         existingTerms,
         language,
+        targetLang,
         customApiKey || undefined
       );
 
-      // 3. Update State if we got results
+      // 3. Update State
       if (newItems && newItems.length > 0) {
         const updatedContent = { ...currentContent };
         
@@ -330,11 +348,7 @@ export default function App() {
            updatedContent.expressions = [...updatedContent.expressions, ...newItems as any];
         }
 
-        // Update current view
         setCurrentContent(updatedContent);
-
-        // Update history / versions
-        // Since we are moving to single-version, we update the master record
         setCurrentVersions([updatedContent]);
 
         setScenarioHistory(prev => {
@@ -356,17 +370,17 @@ export default function App() {
   // --- NEW: Handle Retry Specific Section (Smart Regenerate in place) ---
   const handleRetrySection = async (type: 'vocab' | 'expression') => {
     if (!currentContent) return;
+    const targetLang = currentContent.targetLanguage || 'ja';
 
     try {
-      // 1. Call Service to get standard list (repair mode)
       const repairedItems = await regenerateSection(
         currentContent.scenarioName,
         type,
         language,
+        targetLang,
         customApiKey || undefined
       );
 
-      // 2. Update State in place (no new version)
       if (repairedItems && repairedItems.length > 0) {
         const updatedContent = { ...currentContent };
         
@@ -376,13 +390,9 @@ export default function App() {
            updatedContent.expressions = repairedItems as any;
         }
 
-        // Update current view
         setCurrentContent(updatedContent);
-
-        // Update current version in the versions list
         setCurrentVersions([updatedContent]);
 
-        // Update persistent history
         setScenarioHistory(prev => {
            return prev.map(item => {
               if (item.id === currentContent.scenarioName) {
@@ -401,8 +411,7 @@ export default function App() {
   // --- NEW: Handle Retry Specific Dialogue Scene (Smart Regenerate in place) ---
   const handleRetryDialogueScene = async (sceneIndex: number) => {
      if (!currentContent) return;
-     
-     // Derive roles (Basic fallback if not persisted, but usually persisted)
+     const targetLang = currentContent.targetLanguage || 'ja';
      const roles = currentContent.roles || { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' };
 
      try {
@@ -412,6 +421,7 @@ export default function App() {
          currentContent.vocabulary,
          roles,
          language,
+         targetLang,
          customApiKey || undefined
        );
 
@@ -424,13 +434,9 @@ export default function App() {
              dialogues: updatedDialogues
           };
           
-          // Update View
           setCurrentContent(updatedContent);
-
-          // Update Versions
           setCurrentVersions([updatedContent]);
 
-          // Update History
           setScenarioHistory(prev => {
              return prev.map(item => {
                if (item.id === currentContent.scenarioName) {
@@ -450,8 +456,7 @@ export default function App() {
   // --- NEW: Handle ADD CUSTOM DIALOGUE SCENE ---
   const handleAddDialogueScene = async (prompt: string) => {
     if (!currentContent) return;
-
-    // Derive roles
+    const targetLang = currentContent.targetLanguage || 'ja';
     const roles = currentContent.roles || { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' };
 
     try {
@@ -461,6 +466,7 @@ export default function App() {
             currentContent.vocabulary,
             roles,
             language,
+            targetLang,
             customApiKey || undefined
         );
 
@@ -471,11 +477,9 @@ export default function App() {
                 dialogues: updatedDialogues
             };
 
-            // Update View
             setCurrentContent(updatedContent);
             setCurrentVersions([updatedContent]);
 
-             // Update History
             setScenarioHistory(prev => {
                 return prev.map(item => {
                     if (item.id === currentContent.scenarioName) {
@@ -507,31 +511,21 @@ export default function App() {
     setShowApiKeyModal(false);
     setIsQuotaExceeded(false);
 
-    // If we were trying to load a scenario, resume it
     if (loadingScenarioName) {
       executeScenarioGeneration(loadingScenarioName, key || undefined);
     }
   };
 
   const checkQuotaAndGenerate = async (scenarioName: string) => {
-    // 0. Check if user is admin (Whitelist)
     const isAdmin = checkIsAdmin(user);
-
-    // 1. If user has Custom Key, skip quota check
     if (customApiKey) {
       executeScenarioGeneration(scenarioName, customApiKey);
       return;
     }
-
-    // 2. If user hasn't set preference (First Time) AND is not admin, show modal.
-    // Admins bypass this and default to system generation.
     if (!hasSetApiPreference && !isAdmin) {
       setShowApiKeyModal(true);
       return;
     }
-
-    // 3. Check Quota
-    // If admin, this returns { allowed: true, remaining: 9999 }
     const { allowed } = await checkDailyQuota(user);
     if (allowed) {
       executeScenarioGeneration(scenarioName);
@@ -541,13 +535,11 @@ export default function App() {
     }
   };
 
-  // STRATEGY: SPLIT GENERATION & INCREMENTAL RENDERING
   const executeScenarioGeneration = async (scenarioName: string, overrideKey?: string) => {
     setViewState(ViewState.GENERATING);
     setLoadingStep(0); 
     setIsGeneratingDialogues(false);
     
-    // Adjusted timeline to match reality better (2s, 4.5s)
     const timeline = [2000, 4500];
     const timers: ReturnType<typeof setTimeout>[] = [];
 
@@ -560,28 +552,27 @@ export default function App() {
 
     try {
       // Step 1: Generate Vocab & Expressions (Fast)
-      // Now also generates and returns the specific ROLES for this scenario
-      const partialData = await generateVocabularyAndExpressions(scenarioName, language, overrideKey || customApiKey || undefined);
-      
+      const partialData = await generateVocabularyAndExpressions(
+          scenarioName, 
+          language, 
+          targetLanguage,
+          overrideKey || customApiKey || undefined
+      );
       const roles = partialData.roles || { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' };
       
-      // If we used the free quota (no custom key), increment usage
       if (!overrideKey && !customApiKey) {
         incrementDailyQuota(user);
       }
 
-      // Pre-fill placeholders for dialogues to prevent "undefined" holes in Firestore
-      // Firestore crashes if an array contains undefined.
-      // We initialize with 3 empty valid objects.
       const initialPlaceholders: DialogueSection[] = [
         { title: t.constructing, lines: [] },
         { title: t.constructing, lines: [] },
         { title: t.constructing, lines: [] }
       ];
 
-      // Construct a valid ScenarioContent object
       const initialContent: ScenarioContent = {
          scenarioName: scenarioName,
+         targetLanguage: targetLanguage, // Save target language in content
          vocabulary: partialData.vocabulary || [],
          expressions: partialData.expressions || [],
          dialogues: initialPlaceholders, 
@@ -589,62 +580,50 @@ export default function App() {
          timestamp: Date.now()
       };
 
-      // Save Initial Version
+      // Save Initial Version IMMEDIATELY
       const savedVersion = saveScenarioToHistory(scenarioName, initialContent);
       
       setCurrentVersions([savedVersion]);
       setCurrentVersionIndex(0);
       setCurrentContent(savedVersion);
       
-      // ENTER STUDY VIEW IMMEDIATELY
       setViewState(ViewState.STUDY);
       
-      // Step 2: Generate Dialogues with Incremental Callbacks
+      // Step 2: Generate Dialogues
       setIsGeneratingDialogues(true);
       
-      // Initialize our working array with the same placeholders
       const incomingDialogues: DialogueSection[] = [...initialPlaceholders];
       
       try {
          await generateDialoguesWithCallback(
             scenarioName, 
             initialContent.vocabulary, 
-            roles, // Pass the determined roles to step 2
+            roles,
             (index, sceneData) => {
-                // INCREMENTAL UPDATE:
-                
-                // Safety: Ensure sceneData is not undefined (from fallback logic)
                 if (sceneData) {
                     incomingDialogues[index] = sceneData;
                 }
-                
-                // Create a clean copy without undefined holes
                 const safeDialogues = incomingDialogues.map(d => d || { title: "Error", lines: [] });
-                
-                // We create a new object to trigger React re-render
                 const updatedContent = { 
                     ...initialContent, 
                     dialogues: safeDialogues 
                 };
 
-                // Update current view
                 setCurrentContent(updatedContent);
                 
                 // Update history silently
                 setScenarioHistory(prev => {
                     return prev.map(item => {
                         if (item.id === scenarioName) {
-                            // Update the single version
                             return { ...item, versions: [updatedContent] };
                         }
                         return item;
                     });
                 });
-                
-                // Update versions list state
                 setCurrentVersions([updatedContent]);
             },
             language, 
+            targetLanguage,
             overrideKey || customApiKey || undefined
          );
 
@@ -663,8 +642,6 @@ export default function App() {
     }
   };
 
-  // --- HANDLERS ---
-
   const handleScenarioSelect = async (scenarioName: string) => {
     setLoadingScenarioName(scenarioName);
     setCurrentScenarioId(scenarioName);
@@ -672,11 +649,8 @@ export default function App() {
 
     const existingHistory = scenarioHistory.find(h => h.id === scenarioName);
     
-    // If exists and has content, open it (no quota used)
     if (existingHistory && existingHistory.versions.length > 0) {
       const latestVersion = existingHistory.versions[0];
-      // For legacy support, if there are multiple versions, we only take the first one (latest)
-      // effectively migrating the UI to single-version mode.
       setCurrentVersions([latestVersion]); 
       setCurrentVersionIndex(0);
       setCurrentContent(latestVersion);
@@ -687,7 +661,6 @@ export default function App() {
       
       setViewState(ViewState.STUDY);
     } else {
-      // Logic for new generation
       checkQuotaAndGenerate(scenarioName);
     }
   };
@@ -700,7 +673,6 @@ export default function App() {
   };
 
   const handleVersionSelect = (index: number) => {
-    // Legacy support or fallback if needed, but UI for this is removed
     if (index >= 0 && index < currentVersions.length) {
       setCurrentVersionIndex(index);
       setCurrentContent(currentVersions[index]);
@@ -752,7 +724,6 @@ export default function App() {
   return (
     <div className="h-screen flex flex-col bg-slate-50 text-slate-900 font-sans overflow-hidden">
       
-      {/* API Key Modal */}
       <ApiKeyModal 
         isOpen={showApiKeyModal} 
         onClose={() => setShowApiKeyModal(false)}
@@ -766,7 +737,6 @@ export default function App() {
           className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
           onClick={() => setViewState(ViewState.HOME)}
         >
-          {/* Logo Component with color support */}
           <div className="text-indigo-600 flex-shrink-0">
             <SaynarioLogo className="w-9 h-9" variant="jp" />
           </div>
@@ -774,7 +744,6 @@ export default function App() {
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Favorites Button */}
           <button
             onClick={() => setViewState(ViewState.FAVORITES)}
             className="p-2 rounded-full hover:bg-slate-100 text-slate-600 flex items-center gap-1 transition-colors"
@@ -784,17 +753,14 @@ export default function App() {
             <span className="text-sm font-medium hidden md:inline">{t.favorites}</span>
           </button>
 
-          {/* Separator */}
           <div className="h-6 w-px bg-slate-200 mx-1"></div>
           
-          {/* User Menu */}
           <UserMenu 
             user={user} 
             isSyncing={isSyncing} 
             language={language} 
           />
 
-          {/* Settings Dropdown */}
           <div className="relative" ref={settingsRef}>
              <button 
                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
@@ -805,7 +771,6 @@ export default function App() {
 
              {isSettingsOpen && (
                <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-xl shadow-lg border border-slate-100 py-2 z-50">
-                  {/* Language Toggle */}
                   <button 
                     onClick={toggleLanguage}
                     className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between group"
@@ -819,23 +784,24 @@ export default function App() {
                     </span>
                   </button>
                   
-                  {/* Notation Toggle */}
-                  <button 
-                    onClick={toggleNotation}
-                    className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between group"
-                  >
-                    <div className="flex items-center gap-3 text-slate-700">
-                      <Type className="w-4 h-4 text-slate-400 group-hover:text-indigo-500" />
-                      <span className="text-sm">{t.notation}</span>
-                    </div>
-                    <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded">
-                      {notation === 'kana' ? t.kana : t.romaji}
-                    </span>
-                  </button>
+                  {/* Conditional Rendering: Only show Notation for Japanese (ja) */}
+                  {targetLanguage === 'ja' && (
+                    <button 
+                      onClick={toggleNotation}
+                      className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between group"
+                    >
+                      <div className="flex items-center gap-3 text-slate-700">
+                        <Type className="w-4 h-4 text-slate-400 group-hover:text-indigo-500" />
+                        <span className="text-sm">{t.notation}</span>
+                      </div>
+                      <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded">
+                        {notation === 'kana' ? t.kana : t.romaji}
+                      </span>
+                    </button>
+                  )}
 
                   <div className="h-px bg-slate-100 my-1"></div>
 
-                  {/* Voice Engine Toggle */}
                   <button 
                     onClick={toggleVoiceEngine}
                     className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between group"
@@ -854,7 +820,6 @@ export default function App() {
 
                   <div className="h-px bg-slate-100 my-1"></div>
 
-                  {/* API Key Config */}
                   <button 
                     onClick={() => {
                       setIsSettingsOpen(false);
@@ -882,7 +847,9 @@ export default function App() {
           <Home 
             onScenarioSelect={handleScenarioSelect} 
             onViewHistory={() => setViewState(ViewState.HISTORY)}
-            language={language} 
+            language={language}
+            targetLanguage={targetLanguage}
+            onTargetLanguageChange={setTargetLanguage}
           />
         )}
 
@@ -914,7 +881,6 @@ export default function App() {
               <Loader2 className="w-16 h-16 text-indigo-600 animate-spin relative z-10" />
             </div>
             
-            {/* Dynamic Loading Text (Simplified for Step 1) */}
             <div className="mt-8 h-16 flex flex-col items-center">
                <h2 className="text-2xl font-bold text-slate-800 animate-in fade-in duration-500 key={loadingStep}">
                  {t.loadingSteps[Math.min(loadingStep, 2)]} 

@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { DialogueSection, Language, Notation, VoiceEngine } from '../types';
+import { DialogueSection, Language, Notation, VoiceEngine, TargetLanguage } from '../types';
 import { Play, Pause, Mic, Volume2, MessageSquare, Download, Loader2, RefreshCw, PenTool, Plus } from 'lucide-react';
 import { playTTS, generateDialogueAudioWithProgress } from '../services/geminiService';
 import { UI_TEXT } from '../constants';
@@ -14,6 +13,7 @@ interface Props {
   onRetryScene?: (index: number) => Promise<void>;
   onAddScene?: (prompt: string) => Promise<void>;
   isGenerating?: boolean;
+  targetLanguage?: TargetLanguage;
 }
 
 const getTranslation = (trans: string | { en: string; zh: string } | undefined, lang: Language) => {
@@ -30,7 +30,8 @@ export const DialoguePlayer: React.FC<Props> = ({
     onRetry, 
     onRetryScene,
     onAddScene,
-    isGenerating 
+    isGenerating,
+    targetLanguage = 'ja'
 }) => {
   const [activeSectionIdx, setActiveSectionIdx] = useState<number>(0);
   const [playingLine, setPlayingLine] = useState<{sectionIdx: number, lineIdx: number} | null>(null);
@@ -88,7 +89,7 @@ export const DialoguePlayer: React.FC<Props> = ({
       const voice = speaker === 'A' ? 'Puck' : 'Kore';
       // Get API Key from localStorage for TTS if available
       const customKey = localStorage.getItem('nihongo_api_key') || undefined;
-      await playTTS(text, voice, voiceEngine as VoiceEngine, customKey);
+      await playTTS(text, voice, voiceEngine as VoiceEngine, customKey, targetLanguage as TargetLanguage);
     } catch (error) {
       console.error("Audio Playback Error", error);
     } finally {
@@ -389,6 +390,16 @@ export const DialoguePlayer: React.FC<Props> = ({
                     const isUser = line.speaker === 'A'; 
                     const translation = getTranslation(line.translation, language);
 
+                    // Determine if we show script/phonetics
+                    let script = "";
+                    if (targetLanguage === 'ja') {
+                        script = notation === 'kana' ? line.kana : line.romaji;
+                    } else if (targetLanguage === 'zh' || targetLanguage === 'ko') {
+                        // Use romaji field for Pinyin/Romanization. Kana field is duplicate or secondary script.
+                        script = line.romaji || line.kana;
+                    } 
+                    // For European languages, script is usually empty or irrelevant, so we hide the line if empty.
+
                     return (
                       <div key={lIdx} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[90%] md:max-w-[80%] flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
@@ -407,11 +418,13 @@ export const DialoguePlayer: React.FC<Props> = ({
                             
                             <div className="mb-1 leading-relaxed">{line.japanese}</div>
                             
-                            <div className={`text-sm font-normal mb-3 pb-2 border-b border-dashed ${
-                              isUser ? 'text-indigo-600 border-indigo-200' : 'text-indigo-600 border-slate-100'
-                            }`}>
-                                {notation === 'kana' ? line.kana : line.romaji}
-                            </div>
+                            {script && (
+                                <div className={`text-sm font-normal mb-3 pb-2 border-b border-dashed ${
+                                isUser ? 'text-indigo-600 border-indigo-200' : 'text-indigo-600 border-slate-100'
+                                }`}>
+                                    {script}
+                                </div>
+                            )}
 
                             <p className={`text-sm font-normal text-slate-500`}>
                               {translation}

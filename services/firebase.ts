@@ -1,3 +1,4 @@
+
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import type { FirebaseApp } from 'firebase/app';
 import { 
@@ -265,7 +266,7 @@ const DAILY_LIMIT = 5;
 // Helper to get a stable ID for the user (Auth UID or generated Guest ID)
 export const getStableUserId = (user: User | null): string => {
   if (user && user.uid !== GUEST_ID) {
-    return user.uid;
+    return user.uid; // Logged in users get their Auth ID (ensures sync across devices)
   }
   
   // For guests, use a persistent ID in localStorage
@@ -282,60 +283,95 @@ const getTodayDateString = () => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 };
 
+// --- LOCAL STORAGE FALLBACK HELPERS ---
+const getLocalQuota = (dateStr: string): number => {
+  const key = `nihongo_quota_${dateStr}`;
+  return parseInt(localStorage.getItem(key) || '0', 10);
+};
+
+const incrementLocalQuota = (dateStr: string) => {
+  const key = `nihongo_quota_${dateStr}`;
+  const current = getLocalQuota(dateStr);
+  localStorage.setItem(key, (current + 1).toString());
+};
+
 export const checkDailyQuota = async (user: User | null): Promise<{ allowed: boolean; remaining: number }> => {
   // 1. ADMIN BYPASS CHECK
   if (checkIsAdmin(user)) {
     return { allowed: true, remaining: 9999 };
   }
 
-  if (!isConfigured || !db) {
-    // If Firebase isn't configured, we default to allowing it (dev mode) or blocking it depending on policy.
-    // Here we allow it for safety in dev.
-    return { allowed: true, remaining: 999 };
-  }
-
-  const userId = getStableUserId(user);
   const dateStr = getTodayDateString();
-  const docId = `${userId}_${dateStr}`;
-  const quotaRef = doc(db, 'daily_usage', docId);
+  let count = 0;
+  let usedFirestore = false;
 
-  try {
-    const snap = await getDoc(quotaRef);
-    if (snap.exists()) {
-      const data = snap.data();
-      const count = data.count || 0;
-      return { 
-        allowed: count < DAILY_LIMIT, 
-        remaining: Math.max(0, DAILY_LIMIT - count) 
-      };
-    } else {
-      return { allowed: true, remaining: DAILY_LIMIT };
+  // 2. Try Firestore (PRIORITY)
+  // Logic: Always try Firestore first. If it succeeds, use that data.
+  // If it fails due to permissions (common for guests or strict rules), fallback silently.
+  if (isConfigured && db) {
+    const userId = getStableUserId(user);
+    const docId = `${userId}_${dateStr}`;
+    const quotaRef = doc(db, 'daily_usage', docId);
+
+    try {
+      const snap = await getDoc(quotaRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        count = data.count || 0;
+      }
+      usedFirestore = true; // Mark as successful cloud interaction
+    } catch (e: any) {
+      // PERMISSION DENIED handling:
+      // If we don't have permission (e.g. unauth user, or rules issue), suppress error and fall back.
+      const isPermissionError = e?.code === 'permission-denied' || e?.message?.includes('insufficient permissions');
+      if (!isPermissionError) {
+        console.warn("Firestore quota check failed (network/unknown), falling back to local:", e);
+      }
+      // usedFirestore remains false, triggering fallback below
     }
-  } catch (e) {
-    console.error("Error checking quota:", e);
-    return { allowed: true, remaining: 0 }; // Fail safe?
   }
+
+  // 3. Fallback to Local Storage if Firestore wasn't used (or failed)
+  if (!usedFirestore) {
+     count = getLocalQuota(dateStr);
+  }
+
+  return { 
+    allowed: count < DAILY_LIMIT, 
+    remaining: Math.max(0, DAILY_LIMIT - count) 
+  };
 };
 
 export const incrementDailyQuota = async (user: User | null) => {
-  // 1. ADMIN BYPASS CHECK - Admins don't consume quota
-  if (checkIsAdmin(user)) {
-    return;
+  if (checkIsAdmin(user)) return;
+
+  const dateStr = getTodayDateString();
+  let usedFirestore = false;
+
+  if (isConfigured && db) {
+    const userId = getStableUserId(user);
+    const docId = `${userId}_${dateStr}`;
+    const quotaRef = doc(db, 'daily_usage', docId);
+
+    try {
+      await setDoc(quotaRef, {
+        count: increment(1),
+        updatedAt: Date.now()
+      }, { merge: true });
+      usedFirestore = true; // Success!
+    } catch (e: any) {
+       // Suppress permission errors
+       const isPermissionError = e?.code === 'permission-denied' || e?.message?.includes('insufficient permissions');
+       if (!isPermissionError) {
+          console.error("Firestore quota increment failed:", e);
+       }
+    }
   }
 
-  if (!isConfigured || !db) return;
-
-  const userId = getStableUserId(user);
-  const dateStr = getTodayDateString();
-  const docId = `${userId}_${dateStr}`;
-  const quotaRef = doc(db, 'daily_usage', docId);
-
-  try {
-    await setDoc(quotaRef, {
-      count: increment(1),
-      updatedAt: Date.now()
-    }, { merge: true });
-  } catch (e) {
-    console.error("Error incrementing quota:", e);
+  // If Firestore failed or wasn't used, increment local storage
+  // This ensures that if the cloud write failed (e.g. permissions), we still count it locally
+  // so the user doesn't get infinite free generations just because rules are strict.
+  if (!usedFirestore) {
+    incrementLocalQuota(dateStr);
   }
 };

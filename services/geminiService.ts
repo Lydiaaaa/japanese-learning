@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { ScenarioContent, Language, ProgressCallback, VoiceEngine, VocabularyItem, DialogueSection, DialogueLine, ExpressionItem } from "../types";
+import { ScenarioContent, Language, TargetLanguage, ProgressCallback, VoiceEngine, VocabularyItem, DialogueSection, DialogueLine, ExpressionItem } from "../types";
 
 // Helper to safely get the API Key in both Vite (production) and AI Studio (preview) environments
 const getSystemApiKey = () => {
@@ -17,6 +17,17 @@ const getSystemApiKey = () => {
   }
 
   return undefined;
+};
+
+// Map target language codes to full names for Prompting
+const LANGUAGE_NAMES: Record<TargetLanguage, string> = {
+  zh: 'Mandarin Chinese (Simplified)',
+  en: 'English',
+  ja: 'Japanese',
+  ko: 'Korean',
+  es: 'Spanish',
+  fr: 'French',
+  de: 'German'
 };
 
 // ---------------------------------------------------------------------------
@@ -133,21 +144,37 @@ const findTitle = (obj: any, defaultTitle: string): string => {
 export const generateVocabularyAndExpressions = async (
   scenario: string, 
   language: Language = 'zh', 
+  targetLanguage: TargetLanguage = 'ja',
   customApiKey?: string
 ): Promise<Partial<ScenarioContent> & { roles?: { user: string, partner: string } }> => {
   const ai = getAiInstance(customApiKey);
-  const langName = language === 'zh' ? 'Simplified Chinese' : 'English';
+  const uiLangName = language === 'zh' ? 'Simplified Chinese' : 'English';
+  const targetLangName = LANGUAGE_NAMES[targetLanguage];
+
+  // Logic for Script/Phonetics
+  let scriptInstruction = "";
+  if (targetLanguage === 'ja') {
+      scriptInstruction = "For 'kana', use Hiragana/Katakana. For 'romaji', use Romaji.";
+  } else if (targetLanguage === 'zh') {
+      scriptInstruction = "For 'kana', return empty string (or Hanzi if appropriate). For 'romaji', use Pinyin.";
+  } else if (targetLanguage === 'ko') {
+      scriptInstruction = "For 'kana', use Hangul. For 'romaji', use Romanization.";
+  } else {
+      scriptInstruction = "For 'kana', return empty string. For 'romaji', return empty string (or IPA if useful).";
+  }
 
   // --- SUB-REQUEST 1: SETUP & VOCABULARY ---
   const vocabPrompt = `
     Analyze the scenario: "${scenario}".
+    Target Language to Learn: ${targetLangName}.
+    User's Native Language (for meanings): ${uiLangName}.
     
     Task 1: Define the two specific roles for this roleplay conversation.
-    - userRole: The learner/protagonist (e.g., "International Student", "Tourist", "Patient"). Name MUST be in ${langName}.
-    - partnerRole: The person they are talking to (e.g., "Neighbor", "Waiter", "Doctor"). Name MUST be in ${langName}.
-    - Ensure these roles make sense together for the context "${scenario}".
+    - userRole: The learner/protagonist (e.g., "International Student", "Tourist"). Name MUST be in ${uiLangName}.
+    - partnerRole: The person they are talking to (e.g., "Waiter", "Doctor"). Name MUST be in ${uiLangName}.
     
-    Task 2: Create a Japanese language study list of 12-15 essential Vocabulary words.
+    Task 2: Create a study list of 12-15 essential Vocabulary words in ${targetLangName}.
+    ${scriptInstruction}
     
     Output strictly in JSON.
   `;
@@ -158,8 +185,8 @@ export const generateVocabularyAndExpressions = async (
       setup: {
           type: Type.OBJECT,
           properties: {
-            userRole: { type: Type.STRING, description: `The user's role name in ${langName}` },
-            partnerRole: { type: Type.STRING, description: `The partner's role name in ${langName}` }
+            userRole: { type: Type.STRING, description: `The user's role name in ${uiLangName}` },
+            partnerRole: { type: Type.STRING, description: `The partner's role name in ${uiLangName}` }
           },
           required: ["userRole", "partnerRole"]
       },
@@ -168,7 +195,7 @@ export const generateVocabularyAndExpressions = async (
         items: {
           type: Type.OBJECT,
           properties: {
-            term: { type: Type.STRING },
+            term: { type: Type.STRING, description: `Word in ${targetLangName}` },
             kana: { type: Type.STRING },
             romaji: { type: Type.STRING },
             meaning: { 
@@ -188,8 +215,10 @@ export const generateVocabularyAndExpressions = async (
 
   // --- SUB-REQUEST 2: EXPRESSIONS ---
   const expressionPrompt = `
-    Context: Japanese learning scenario "${scenario}".
-    Task: Create a list of 6-8 common useful Expressions/Phrases for this scenario.
+    Context: Learning ${targetLangName} scenario "${scenario}".
+    User's Native Language: ${uiLangName}.
+    Task: Create a list of 6-8 common useful Expressions/Phrases for this scenario in ${targetLangName}.
+    ${scriptInstruction}
     
     Output strictly in JSON.
   `;
@@ -202,7 +231,7 @@ export const generateVocabularyAndExpressions = async (
         items: {
           type: Type.OBJECT,
           properties: {
-            phrase: { type: Type.STRING },
+            phrase: { type: Type.STRING, description: `Phrase in ${targetLangName}` },
             kana: { type: Type.STRING },
             romaji: { type: Type.STRING },
             meaning: { 
@@ -282,28 +311,40 @@ export const generateVocabularyAndExpressions = async (
   };
 };
 
-// ... existing regenerateSection and generateMoreItems functions ...
-
 export const regenerateSection = async (
   scenario: string,
   type: 'vocab' | 'expression',
   language: Language = 'zh',
+  targetLanguage: TargetLanguage = 'ja',
   customApiKey?: string
 ): Promise<(VocabularyItem | ExpressionItem)[]> => {
   const ai = getAiInstance(customApiKey);
-  const langName = language === 'zh' ? 'Simplified Chinese' : 'English';
+  const uiLangName = language === 'zh' ? 'Simplified Chinese' : 'English';
+  const targetLangName = LANGUAGE_NAMES[targetLanguage];
   
   const isVocab = type === 'vocab';
   const label = isVocab ? 'vocabulary words' : 'common phrases/expressions';
   const count = isVocab ? 12 : 8; 
+
+  let scriptInstruction = "";
+  if (targetLanguage === 'ja') {
+      scriptInstruction = "For 'kana', use Hiragana/Katakana. For 'romaji', use Romaji.";
+  } else if (targetLanguage === 'zh') {
+      scriptInstruction = "For 'kana', use empty string. For 'romaji', use Pinyin.";
+  } else if (targetLanguage === 'ko') {
+      scriptInstruction = "For 'kana', use Hangul. For 'romaji', use Romanization.";
+  } else {
+      scriptInstruction = "For 'kana', return empty string. For 'romaji', return empty string.";
+  }
   
   const prompt = `
-    Context: Japanese learning scenario "${scenario}".
-    Task: Create a Japanese language study list of ${count} essential ${label}.
+    Context: Learning ${targetLangName} scenario "${scenario}".
+    Task: Create a study list of ${count} essential ${label} in ${targetLangName}.
     
     Requirements:
     - Highly relevant to the scenario.
-    - Definitions in English and ${langName}.
+    - Definitions in English and ${uiLangName}.
+    ${scriptInstruction}
     
     Output strictly in JSON.
   `;
@@ -380,9 +421,12 @@ export const generateMoreItems = async (
   type: 'vocab' | 'expression',
   existingItems: string[],
   language: Language = 'zh',
+  targetLanguage: TargetLanguage = 'ja',
   customApiKey?: string
 ): Promise<(VocabularyItem | ExpressionItem)[]> => {
   const ai = getAiInstance(customApiKey);
+  const targetLangName = LANGUAGE_NAMES[targetLanguage];
+  const uiLangName = language === 'zh' ? 'Simplified Chinese' : 'English';
   
   const isVocab = type === 'vocab';
   const label = isVocab ? 'vocabulary words' : 'common phrases/expressions';
@@ -391,13 +435,26 @@ export const generateMoreItems = async (
   // To keep prompt short, only send last 30 existing items if list is huge
   const excludeList = existingItems.slice(-30).join('", "');
 
+  let scriptInstruction = "";
+  if (targetLanguage === 'ja') {
+      scriptInstruction = "For 'kana', use Hiragana/Katakana. For 'romaji', use Romaji.";
+  } else if (targetLanguage === 'zh') {
+      scriptInstruction = "For 'kana', use empty string. For 'romaji', use Pinyin.";
+  } else if (targetLanguage === 'ko') {
+      scriptInstruction = "For 'kana', use Hangul. For 'romaji', use Romanization.";
+  } else {
+      scriptInstruction = "For 'kana', return empty string. For 'romaji', return empty string.";
+  }
+
   const prompt = `
-    Context: Japanese learning scenario "${scenario}".
-    Task: Generate ${count} NEW ${label} related to this scenario.
+    Context: Learning ${targetLangName} scenario "${scenario}".
+    Task: Generate ${count} NEW ${label} related to this scenario in ${targetLangName}.
+    User's Native Language: ${uiLangName}.
     
     CRITICAL CONSTRAINT: 
     - DO NOT include these items already generated: "${excludeList}".
     - Provide strictly unique, new items.
+    ${scriptInstruction}
     
     Output strictly in JSON.
   `;
@@ -476,6 +533,7 @@ const generateSingleScene = async (
   contextVocab: string,
   roles: { user: string, partner: string },
   language: Language,
+  targetLanguage: TargetLanguage,
   customApiKey?: string,
   attempt: number = 1,
   customPrompt?: string // For custom scenes
@@ -493,7 +551,19 @@ const generateSingleScene = async (
       }[sceneIndex] || "";
   }
 
-  const titleLanguage = language === 'zh' ? "Simplified Chinese (简体中文)" : "English";
+  const uiLangName = language === 'zh' ? "Simplified Chinese" : "English";
+  const targetLangName = LANGUAGE_NAMES[targetLanguage];
+
+  let scriptInstruction = "";
+  if (targetLanguage === 'ja') {
+      scriptInstruction = "For 'kana', use Hiragana/Katakana. For 'romaji', use Romaji.";
+  } else if (targetLanguage === 'zh') {
+      scriptInstruction = "For 'kana', return empty string. For 'romaji', use Pinyin.";
+  } else if (targetLanguage === 'ko') {
+      scriptInstruction = "For 'kana', use Hangul. For 'romaji', use Romanization.";
+  } else {
+      scriptInstruction = "For 'kana', return empty string. For 'romaji', return empty string.";
+  }
 
   // Strict instructions for consistency
   const prompt = `
@@ -501,6 +571,7 @@ const generateSingleScene = async (
     Type: ${sceneType}.
     Goal: ${goalInstruction}.
     Context: ${contextVocab}.
+    Target Language: ${targetLangName}.
     
     DEFINED ROLES (STRICTLY ENFORCE):
     - Speaker A (User/Protagonist): "${roles.user}"
@@ -509,17 +580,19 @@ const generateSingleScene = async (
     Output strictly valid JSON (No Markdown).
     
     CRITICAL RULES:
-    1. "title": Short, specific title for this scene in ${titleLanguage}. DO NOT include the scenario name "${scenario}" in the title.
+    1. "title": Short, specific title for this scene in ${uiLangName}. DO NOT include the scenario name "${scenario}" in the title.
     2. "lines": Array of dialogue turns.
     3. "speaker": MUST be strictly "A" or "B". 
     4. "roleName":
        - If speaker is "A", set roleName to "${roles.user}".
        - If speaker is "B", set roleName to "${roles.partner}".
-       - DO NOT invent new role names. Use exactly provided names.
+    5. "japanese": The dialogue text in ${targetLangName} (using standard script).
+    6. "translation": Translate meaning to ${uiLangName}.
+    ${scriptInstruction}
 
     Structure:
     {
-      "title": "Title in ${titleLanguage}",
+      "title": "Title in ${uiLangName}",
       "lines": [
         {
           "speaker": "A",
@@ -534,7 +607,7 @@ const generateSingleScene = async (
 
     Requirements:
     - 4-6 concise dialogue turns.
-    - Natural Japanese spoken style.
+    - Natural spoken style in ${targetLangName}.
   `;
 
   try {
@@ -625,7 +698,7 @@ const generateSingleScene = async (
     if (attempt < 2) {
       // Retry once with backoff
       await new Promise(r => setTimeout(r, 2000));
-      return generateSingleScene(scenario, sceneIndex, sceneType, contextVocab, roles, language, customApiKey, attempt + 1, customPrompt);
+      return generateSingleScene(scenario, sceneIndex, sceneType, contextVocab, roles, language, targetLanguage, customApiKey, attempt + 1, customPrompt);
     }
     
     // FALLBACK OBJECT
@@ -634,9 +707,9 @@ const generateSingleScene = async (
       lines: [{
         speaker: "B",
         roleName: roles.partner || "System",
-        japanese: "申し訳ありません。生成に時間がかかりすぎました。",
-        kana: "もうしわけありません。せいせいにじかんがかかりすぎました。",
-        romaji: "Moushiwake arimasen. Seisei ni jikan ga kakarisugimashita.",
+        japanese: targetLanguage === 'ja' ? "申し訳ありません。生成に時間がかかりすぎました。" : "Sorry, generation timed out.",
+        kana: "",
+        romaji: "",
         translation: { 
             en: "Sorry, generation timed out. Please try again.", 
             zh: "抱歉，生成超时。请尝试重新生成。" 
@@ -653,14 +726,12 @@ export const regenerateSingleDialogue = async (
   contextVocabulary: VocabularyItem[], 
   roles: { user: string, partner: string },
   language: Language = 'zh', 
+  targetLanguage: TargetLanguage = 'ja',
   customApiKey?: string
 ): Promise<DialogueSection> => {
     
     // Convert 0-based index to 1-based Logic
     const index = sceneIndex + 1;
-    // Note: If sceneIndex >= 3, it's likely a custom scene, but for regeneration we treat it as Process/Custom
-    // Actually, for custom scenes, we might lose the original prompt context in this simplified regenerate function.
-    // For now, if index > 3, we treat it as "Process" type for regeneration which is a safe generic fallback.
     const type = index === 1 ? "Intro" : (index === 2 ? "Process" : (index === 3 ? "Conclusion" : "Custom"));
     
     const vocabList = contextVocabulary.slice(0, 8).map(v => v.term).join(", ");
@@ -672,6 +743,7 @@ export const regenerateSingleDialogue = async (
         vocabList, 
         roles, 
         language, 
+        targetLanguage,
         customApiKey
     );
 };
@@ -683,6 +755,7 @@ export const generateCustomScene = async (
   contextVocabulary: VocabularyItem[], 
   roles: { user: string, partner: string },
   language: Language = 'zh', 
+  targetLanguage: TargetLanguage = 'ja',
   customApiKey?: string
 ): Promise<DialogueSection> => {
     
@@ -696,6 +769,7 @@ export const generateCustomScene = async (
         vocabList, 
         roles, 
         language, 
+        targetLanguage,
         customApiKey,
         1,
         userPrompt
@@ -711,6 +785,7 @@ export const generateDialoguesWithCallback = async (
   roles: { user: string, partner: string },
   onSceneComplete: (index: number, scene: DialogueSection) => void,
   language: Language = 'zh', 
+  targetLanguage: TargetLanguage = 'ja',
   customApiKey?: string
 ): Promise<void> => {
   
@@ -718,55 +793,18 @@ export const generateDialoguesWithCallback = async (
 
   // Fire requests. We do NOT await Promise.all here because we want to trigger callbacks individually.
   
-  const p1 = generateSingleScene(scenario, 1, "Intro", vocabList, roles, language, customApiKey)
+  const p1 = generateSingleScene(scenario, 1, "Intro", vocabList, roles, language, targetLanguage, customApiKey)
     .then(scene => onSceneComplete(0, scene));
     
-  const p2 = generateSingleScene(scenario, 2, "Process", vocabList, roles, language, customApiKey)
+  const p2 = generateSingleScene(scenario, 2, "Process", vocabList, roles, language, targetLanguage, customApiKey)
     .then(scene => onSceneComplete(1, scene));
     
-  const p3 = generateSingleScene(scenario, 3, "Conclusion", vocabList, roles, language, customApiKey)
+  const p3 = generateSingleScene(scenario, 3, "Conclusion", vocabList, roles, language, targetLanguage, customApiKey)
     .then(scene => onSceneComplete(2, scene));
 
   await Promise.all([p1, p2, p3]);
 };
 
-// Kept for backward compatibility if needed, but App.tsx should use the callback version now
-export const generateDialoguesOnly = async (
-  scenario: string, 
-  contextVocabulary: VocabularyItem[], 
-  roles: { user: string, partner: string },
-  language: Language = 'zh', 
-  customApiKey?: string
-): Promise<DialogueSection[]> => {
-    const results: DialogueSection[] = [];
-    await generateDialoguesWithCallback(
-        scenario, 
-        contextVocabulary, 
-        roles,
-        (idx, scene) => { results[idx] = scene; },
-        language, 
-        customApiKey
-    );
-    return results;
-};
-
-
-// Keep the old full generation function for fallback/regenerate all if needed
-export const generateScenarioContent = async (scenario: string, language: Language = 'zh', customApiKey?: string): Promise<ScenarioContent> => {
-   // Implementation reused for single-shot generation (e.g. from history regeneration)
-   const part1 = await generateVocabularyAndExpressions(scenario, language, customApiKey);
-   const roles = part1.roles || { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' };
-   const part2 = await generateDialoguesOnly(scenario, part1.vocabulary || [], roles, language, customApiKey);
-   
-   return {
-     scenarioName: scenario,
-     vocabulary: part1.vocabulary || [],
-     expressions: part1.expressions || [],
-     dialogues: part2,
-     roles: roles,
-     timestamp: Date.now()
-   };
-};
 
 // ... existing audio functions ...
 // Retrieve AudioBuffer for text (from Cache or Network)
@@ -834,6 +872,7 @@ export const generateDialogueAudioWithProgress = async (
        const batch = lines.slice(i, i + BATCH_SIZE);
        
        const batchPromises = batch.map(async (line, batchIdx) => {
+           // For simple multilingual support, we reuse Puck/Kore as generic male/female voices
            const voice = line.speaker === 'A' ? 'Puck' : 'Kore';
            let attempts = 0;
            while (attempts < 3) {
@@ -874,7 +913,7 @@ export const generateDialogueAudioWithProgress = async (
 };
 
 // Native Browser TTS (Fast & Free)
-export const playSystemTTS = (text: string): Promise<void> => {
+export const playSystemTTS = (text: string, langCode: string = 'ja-JP'): Promise<void> => {
     return new Promise((resolve) => {
         if (!window.speechSynthesis) {
             console.error("Web Speech API not supported");
@@ -886,14 +925,25 @@ export const playSystemTTS = (text: string): Promise<void> => {
         window.speechSynthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'ja-JP';
+        // Map target language code to TTS locale
+        let locale = 'ja-JP';
+        switch(langCode) {
+            case 'en': locale = 'en-US'; break;
+            case 'zh': locale = 'zh-CN'; break;
+            case 'ko': locale = 'ko-KR'; break;
+            case 'es': locale = 'es-ES'; break;
+            case 'fr': locale = 'fr-FR'; break;
+            case 'de': locale = 'de-DE'; break;
+            default: locale = 'ja-JP';
+        }
+        utterance.lang = locale;
         utterance.rate = 1.0; 
         
-        // Try to find a Japanese voice
+        // Try to find a voice for this language
         const voices = window.speechSynthesis.getVoices();
-        const jaVoice = voices.find(v => v.lang.includes('ja') || v.name.includes('Japanese'));
-        if (jaVoice) {
-            utterance.voice = jaVoice;
+        const targetVoice = voices.find(v => v.lang.includes(langCode) || v.lang.includes(locale));
+        if (targetVoice) {
+            utterance.voice = targetVoice;
         }
 
         utterance.onend = () => {
@@ -914,11 +964,12 @@ export const playTTS = async (
   text: string, 
   voiceName: 'Puck' | 'Kore' = 'Puck', 
   engine: VoiceEngine = 'system',
-  customApiKey?: string
+  customApiKey?: string,
+  targetLanguage: TargetLanguage = 'ja'
 ): Promise<void> => {
   // If engine is system, use native browser TTS
   if (engine === 'system') {
-    return playSystemTTS(text);
+    return playSystemTTS(text, targetLanguage);
   }
 
   // Otherwise, use Gemini AI

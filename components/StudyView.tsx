@@ -381,6 +381,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
               onRetry={() => handleRetrySpecific('vocab')}
               onLoadMore={() => handleLoadMore('vocab')}
               canLoadMore={vocabLoadCount < MAX_LOAD_MORE}
+              targetLanguage={content.targetLanguage}
             />
           )}
           
@@ -396,6 +397,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
               onRetry={() => handleRetrySpecific('expression')}
               onLoadMore={() => handleLoadMore('expression')}
               canLoadMore={expressionLoadCount < MAX_LOAD_MORE}
+              targetLanguage={content.targetLanguage}
             />
           )}
 
@@ -409,6 +411,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
               onRetryScene={onRetryScene}
               onAddScene={onAddScene}
               isGenerating={isGeneratingDialogues}
+              targetLanguage={content.targetLanguage}
             />
           )}
         </div>
