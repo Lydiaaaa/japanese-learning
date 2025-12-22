@@ -24,9 +24,9 @@ export const UserMenu: React.FC<UserMenuProps> = ({ user, isSyncing, language })
 
   if (isSyncing) {
     return (
-      <div className="flex items-center gap-2 text-slate-400 px-3 py-1.5">
+      <div className="flex items-center gap-2 text-slate-400 px-3 py-1.5 border-2 border-transparent">
         <Loader2 className="w-4 h-4 animate-spin" />
-        <span className="text-sm hidden sm:inline">{t.syncing}</span>
+        <span className="text-sm hidden sm:inline font-bold">{t.syncing}</span>
       </div>
     );
   }
@@ -34,9 +34,10 @@ export const UserMenu: React.FC<UserMenuProps> = ({ user, isSyncing, language })
   if (!user) {
     return (
       <div className="flex items-center gap-2">
+        {/* Removed shadow-neo-sm from black button, radius reduced */}
         <button
           onClick={() => loginWithGoogle()}
-          className="flex items-center gap-1 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200"
+          className="flex items-center gap-1 px-4 py-2 rounded-lg bg-black border-2 border-black text-white text-sm font-bold hover:bg-slate-800 transition-all hover:scale-105 active:scale-95"
         >
           <LogIn className="w-4 h-4" />
           <span className="hidden sm:inline">{t.login}</span>
@@ -51,17 +52,17 @@ export const UserMenu: React.FC<UserMenuProps> = ({ user, isSyncing, language })
     <div className="flex items-center gap-3">
       <div className="flex items-center gap-2">
         {isGuest ? (
-           <div className="flex items-center gap-2 bg-amber-50 text-amber-700 px-2 py-1 rounded-lg border border-amber-100 flex-shrink-0">
+           <div className="flex items-center gap-2 bg-pastel-yellow text-black px-3 py-1.5 rounded-lg border-2 border-black flex-shrink-0 shadow-sm">
              <UserIcon className="w-4 h-4" />
-             <span className="text-sm font-medium hidden sm:inline">访客</span>
+             <span className="text-xs font-black uppercase tracking-wider hidden sm:inline">Guest</span>
            </div>
         ) : (
           <>
             {user.photoURL ? (
-              <img src={user.photoURL} alt={user.displayName || "User"} className="w-8 h-8 rounded-full border border-slate-200 flex-shrink-0 object-cover" />
+              <img src={user.photoURL} alt={user.displayName || "User"} className="w-9 h-9 rounded-full border-2 border-black flex-shrink-0 object-cover shadow-sm" />
             ) : (
-              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
-                <UserIcon className="w-4 h-4" />
+              <div className="w-9 h-9 rounded-full bg-pastel-blue border-2 border-black flex items-center justify-center text-black flex-shrink-0 shadow-sm">
+                <UserIcon className="w-5 h-5" />
               </div>
             )}
           </>
@@ -70,10 +71,10 @@ export const UserMenu: React.FC<UserMenuProps> = ({ user, isSyncing, language })
       
       <button
         onClick={handleLogout}
-        className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors flex-shrink-0"
+        className="p-2 text-slate-800 hover:text-black hover:bg-slate-100 border-2 border-transparent hover:border-black rounded-lg transition-all flex-shrink-0"
         title={t.logout}
       >
-        <LogOut className="w-4 h-4" />
+        <LogOut className="w-4 h-4 stroke-[3]" />
       </button>
     </div>
   );

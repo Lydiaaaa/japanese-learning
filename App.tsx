@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Home } from './components/Home';
 import { StudyView } from './components/StudyView';
@@ -313,44 +312,27 @@ export default function App() {
     setCurrentScenarioId('');
   };
 
-  // --- NEW: Handle Load More Items (Incremental Append) ---
+  // ... (keeping other handlers same as they are logic only) ...
   const handleLoadMoreItems = async (type: 'vocab' | 'expression') => {
     if (!currentContent) return;
-    // Use stored target language or default to Japanese if missing in old data
     const targetLang = currentContent.targetLanguage || 'ja';
-
     try {
-      // 1. Gather existing terms
       let existingTerms: string[] = [];
       if (type === 'vocab') {
          existingTerms = currentContent.vocabulary.map(v => v.term);
       } else {
          existingTerms = currentContent.expressions.map(e => e.phrase);
       }
-
-      // 2. Call Service
-      const newItems = await generateMoreItems(
-        currentContent.scenarioName,
-        type,
-        existingTerms,
-        language,
-        targetLang,
-        customApiKey || undefined
-      );
-
-      // 3. Update State
+      const newItems = await generateMoreItems(currentContent.scenarioName, type, existingTerms, language, targetLang, customApiKey || undefined);
       if (newItems && newItems.length > 0) {
         const updatedContent = { ...currentContent };
-        
         if (type === 'vocab') {
            updatedContent.vocabulary = [...updatedContent.vocabulary, ...newItems as any];
         } else {
            updatedContent.expressions = [...updatedContent.expressions, ...newItems as any];
         }
-
         setCurrentContent(updatedContent);
         setCurrentVersions([updatedContent]);
-
         setScenarioHistory(prev => {
            return prev.map(item => {
               if (item.id === currentContent.scenarioName) {
@@ -360,39 +342,26 @@ export default function App() {
            });
         });
       }
-
     } catch (e) {
       console.error("Failed to load more items", e);
       alert(t.errorDesc);
     }
   };
 
-  // --- NEW: Handle Retry Specific Section (Smart Regenerate in place) ---
   const handleRetrySection = async (type: 'vocab' | 'expression') => {
     if (!currentContent) return;
     const targetLang = currentContent.targetLanguage || 'ja';
-
     try {
-      const repairedItems = await regenerateSection(
-        currentContent.scenarioName,
-        type,
-        language,
-        targetLang,
-        customApiKey || undefined
-      );
-
+      const repairedItems = await regenerateSection(currentContent.scenarioName, type, language, targetLang, customApiKey || undefined);
       if (repairedItems && repairedItems.length > 0) {
         const updatedContent = { ...currentContent };
-        
         if (type === 'vocab') {
            updatedContent.vocabulary = repairedItems as any;
         } else {
            updatedContent.expressions = repairedItems as any;
         }
-
         setCurrentContent(updatedContent);
         setCurrentVersions([updatedContent]);
-
         setScenarioHistory(prev => {
            return prev.map(item => {
               if (item.id === currentContent.scenarioName) {
@@ -408,35 +377,18 @@ export default function App() {
     }
   };
 
-  // --- NEW: Handle Retry Specific Dialogue Scene (Smart Regenerate in place) ---
   const handleRetryDialogueScene = async (sceneIndex: number) => {
      if (!currentContent) return;
      const targetLang = currentContent.targetLanguage || 'ja';
      const roles = currentContent.roles || { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' };
-
      try {
-       const newScene = await regenerateSingleDialogue(
-         currentContent.scenarioName,
-         sceneIndex,
-         currentContent.vocabulary,
-         roles,
-         language,
-         targetLang,
-         customApiKey || undefined
-       );
-
+       const newScene = await regenerateSingleDialogue(currentContent.scenarioName, sceneIndex, currentContent.vocabulary, roles, language, targetLang, customApiKey || undefined);
        if (newScene) {
           const updatedDialogues = [...currentContent.dialogues];
           updatedDialogues[sceneIndex] = newScene;
-
-          const updatedContent = {
-             ...currentContent,
-             dialogues: updatedDialogues
-          };
-          
+          const updatedContent = { ...currentContent, dialogues: updatedDialogues };
           setCurrentContent(updatedContent);
           setCurrentVersions([updatedContent]);
-
           setScenarioHistory(prev => {
              return prev.map(item => {
                if (item.id === currentContent.scenarioName) {
@@ -446,40 +398,23 @@ export default function App() {
              });
           });
        }
-
      } catch (e) {
        console.error("Failed to regenerate scene", e);
        alert(t.errorDesc);
      }
   };
 
-  // --- NEW: Handle ADD CUSTOM DIALOGUE SCENE ---
   const handleAddDialogueScene = async (prompt: string) => {
     if (!currentContent) return;
     const targetLang = currentContent.targetLanguage || 'ja';
     const roles = currentContent.roles || { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' };
-
     try {
-        const newScene = await generateCustomScene(
-            currentContent.scenarioName,
-            prompt,
-            currentContent.vocabulary,
-            roles,
-            language,
-            targetLang,
-            customApiKey || undefined
-        );
-
+        const newScene = await generateCustomScene(currentContent.scenarioName, prompt, currentContent.vocabulary, roles, language, targetLang, customApiKey || undefined);
         if (newScene) {
             const updatedDialogues = [...currentContent.dialogues, newScene];
-            const updatedContent = {
-                ...currentContent,
-                dialogues: updatedDialogues
-            };
-
+            const updatedContent = { ...currentContent, dialogues: updatedDialogues };
             setCurrentContent(updatedContent);
             setCurrentVersions([updatedContent]);
-
             setScenarioHistory(prev => {
                 return prev.map(item => {
                     if (item.id === currentContent.scenarioName) {
@@ -495,8 +430,6 @@ export default function App() {
     }
   };
 
-  // --- API KEY & QUOTA LOGIC ---
-
   const handleApiKeyConfirm = (key: string | null) => {
     if (key) {
       setCustomApiKey(key);
@@ -505,12 +438,10 @@ export default function App() {
       setCustomApiKey(null);
       localStorage.removeItem('nihongo_api_key');
     }
-    
     setHasSetApiPreference(true);
     localStorage.setItem('nihongo_api_pref_set', 'true');
     setShowApiKeyModal(false);
     setIsQuotaExceeded(false);
-
     if (loadingScenarioName) {
       executeScenarioGeneration(loadingScenarioName, key || undefined);
     }
@@ -551,13 +482,7 @@ export default function App() {
     });
 
     try {
-      // Step 1: Generate Vocab & Expressions (Fast)
-      const partialData = await generateVocabularyAndExpressions(
-          scenarioName, 
-          language, 
-          targetLanguage,
-          overrideKey || customApiKey || undefined
-      );
+      const partialData = await generateVocabularyAndExpressions(scenarioName, language, targetLanguage, overrideKey || customApiKey || undefined);
       const roles = partialData.roles || { user: language === 'zh' ? '我' : 'Me', partner: language === 'zh' ? '对方' : 'Partner' };
       
       if (!overrideKey && !customApiKey) {
@@ -572,7 +497,7 @@ export default function App() {
 
       const initialContent: ScenarioContent = {
          scenarioName: scenarioName,
-         targetLanguage: targetLanguage, // Save target language in content
+         targetLanguage: targetLanguage, 
          vocabulary: partialData.vocabulary || [],
          expressions: partialData.expressions || [],
          dialogues: initialPlaceholders, 
@@ -580,38 +505,22 @@ export default function App() {
          timestamp: Date.now()
       };
 
-      // Save Initial Version IMMEDIATELY
       const savedVersion = saveScenarioToHistory(scenarioName, initialContent);
-      
       setCurrentVersions([savedVersion]);
       setCurrentVersionIndex(0);
       setCurrentContent(savedVersion);
-      
       setViewState(ViewState.STUDY);
-      
-      // Step 2: Generate Dialogues
       setIsGeneratingDialogues(true);
       
       const incomingDialogues: DialogueSection[] = [...initialPlaceholders];
-      
       try {
-         await generateDialoguesWithCallback(
-            scenarioName, 
-            initialContent.vocabulary, 
-            roles,
-            (index, sceneData) => {
+         await generateDialoguesWithCallback(scenarioName, initialContent.vocabulary, roles, (index, sceneData) => {
                 if (sceneData) {
                     incomingDialogues[index] = sceneData;
                 }
                 const safeDialogues = incomingDialogues.map(d => d || { title: "Error", lines: [] });
-                const updatedContent = { 
-                    ...initialContent, 
-                    dialogues: safeDialogues 
-                };
-
+                const updatedContent = { ...initialContent, dialogues: safeDialogues };
                 setCurrentContent(updatedContent);
-                
-                // Update history silently
                 setScenarioHistory(prev => {
                     return prev.map(item => {
                         if (item.id === scenarioName) {
@@ -621,18 +530,12 @@ export default function App() {
                     });
                 });
                 setCurrentVersions([updatedContent]);
-            },
-            language, 
-            targetLanguage,
-            overrideKey || customApiKey || undefined
-         );
-
+            }, language, targetLanguage, overrideKey || customApiKey || undefined);
       } catch (bgError) {
          console.error("Background dialogue generation failed", bgError);
       } finally {
          setIsGeneratingDialogues(false);
       }
-
     } catch (err) {
       console.error(err);
       setErrorMsg(t.errorDesc);
@@ -646,19 +549,13 @@ export default function App() {
     setLoadingScenarioName(scenarioName);
     setCurrentScenarioId(scenarioName);
     setErrorMsg(null);
-
     const existingHistory = scenarioHistory.find(h => h.id === scenarioName);
-    
     if (existingHistory && existingHistory.versions.length > 0) {
       const latestVersion = existingHistory.versions[0];
       setCurrentVersions([latestVersion]); 
       setCurrentVersionIndex(0);
       setCurrentContent(latestVersion);
-      
-      setScenarioHistory(prev => prev.map(item => 
-        item.id === scenarioName ? { ...item, lastAccessed: Date.now() } : item
-      ));
-      
+      setScenarioHistory(prev => prev.map(item => item.id === scenarioName ? { ...item, lastAccessed: Date.now() } : item));
       setViewState(ViewState.STUDY);
     } else {
       checkQuotaAndGenerate(scenarioName);
@@ -685,11 +582,7 @@ export default function App() {
     setCurrentVersions([latestVersion]);
     setCurrentVersionIndex(0);
     setCurrentContent(latestVersion);
-    
-    setScenarioHistory(prev => prev.map(h => 
-      h.id === item.id ? { ...h, lastAccessed: Date.now() } : h
-    ));
-    
+    setScenarioHistory(prev => prev.map(h => h.id === item.id ? { ...h, lastAccessed: Date.now() } : h));
     setViewState(ViewState.STUDY);
   };
 
@@ -722,7 +615,7 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50 text-slate-900 font-sans overflow-hidden">
+    <div className="h-screen flex flex-col bg-pastel-bg text-slate-900 font-sans overflow-hidden">
       
       <ApiKeyModal 
         isOpen={showApiKeyModal} 
@@ -732,28 +625,30 @@ export default function App() {
         isQuotaExceeded={isQuotaExceeded}
       />
 
-      <nav className="bg-white border-b border-slate-100 px-4 md:px-6 py-4 flex justify-between items-center z-10 shadow-sm flex-shrink-0">
+      <nav className="bg-white border-b-2 border-black px-4 md:px-6 py-4 flex justify-between items-center z-10 shadow-none flex-shrink-0">
         <div 
           className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
           onClick={() => setViewState(ViewState.HOME)}
         >
-          <div className="text-indigo-600 flex-shrink-0">
-            <SaynarioLogo className="w-9 h-9" variant="jp" />
+          {/* Logo Icon */}
+          <div className="flex-shrink-0">
+            <SaynarioLogo className="w-10 h-10" />
           </div>
-          <span className="font-bold text-lg text-slate-800 hidden sm:inline">{t.navTitle}</span>
+          {/* Updated Brand Text: Kalnia Font, Capitalized S and N, Bigger */}
+          <span className="font-display font-bold text-2xl text-black hidden sm:inline tracking-tight">SayNario</span>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => setViewState(ViewState.FAVORITES)}
-            className="p-2 rounded-full hover:bg-slate-100 text-slate-600 flex items-center gap-1 transition-colors"
+            className="p-2 rounded-lg hover:bg-pastel-yellow border-2 border-transparent hover:border-black text-slate-800 flex items-center gap-1 transition-all"
             title={t.favorites}
           >
             <Star className="w-5 h-5" />
-            <span className="text-sm font-medium hidden md:inline">{t.favorites}</span>
+            <span className="text-sm font-bold hidden md:inline">{t.favorites}</span>
           </button>
 
-          <div className="h-6 w-px bg-slate-200 mx-1"></div>
+          <div className="h-8 w-0.5 bg-black mx-1 opacity-10"></div>
           
           <UserMenu 
             user={user} 
@@ -764,61 +659,60 @@ export default function App() {
           <div className="relative" ref={settingsRef}>
              <button 
                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-               className={`p-2 rounded-full transition-colors flex items-center gap-1 ${isSettingsOpen ? 'bg-indigo-50 text-indigo-600' : 'hover:bg-slate-100 text-slate-600'}`}
+               className={`p-2 rounded-lg transition-all border-2 flex items-center gap-1 ${isSettingsOpen ? 'bg-black text-white border-black' : 'border-transparent hover:border-black hover:bg-white text-slate-800'}`}
              >
                <Settings className="w-5 h-5" />
              </button>
 
              {isSettingsOpen && (
-               <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-xl shadow-lg border border-slate-100 py-2 z-50">
+               <div className="absolute right-0 top-full mt-3 w-64 bg-white rounded-xl shadow-neo border-2 border-black py-2 z-50 overflow-hidden">
                   <button 
                     onClick={toggleLanguage}
-                    className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between group"
+                    className="w-full text-left px-5 py-3 hover:bg-pastel-blue flex items-center justify-between group transition-colors"
                   >
-                    <div className="flex items-center gap-3 text-slate-700">
-                      <Globe className="w-4 h-4 text-slate-400 group-hover:text-indigo-500" />
+                    <div className="flex items-center gap-3 text-slate-800 font-bold">
+                      <Globe className="w-4 h-4" />
                       <span className="text-sm">Language</span>
                     </div>
-                    <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded">
+                    <span className="text-xs font-black bg-black text-white px-2 py-1 rounded">
                       {language === 'zh' ? 'CN' : 'EN'}
                     </span>
                   </button>
                   
-                  {/* Conditional Rendering: Only show Notation for Japanese (ja) */}
                   {targetLanguage === 'ja' && (
                     <button 
                       onClick={toggleNotation}
-                      className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between group"
+                      className="w-full text-left px-5 py-3 hover:bg-pastel-pink flex items-center justify-between group transition-colors"
                     >
-                      <div className="flex items-center gap-3 text-slate-700">
-                        <Type className="w-4 h-4 text-slate-400 group-hover:text-indigo-500" />
+                      <div className="flex items-center gap-3 text-slate-800 font-bold">
+                        <Type className="w-4 h-4" />
                         <span className="text-sm">{t.notation}</span>
                       </div>
-                      <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded">
+                      <span className="text-xs font-black bg-black text-white px-2 py-1 rounded">
                         {notation === 'kana' ? t.kana : t.romaji}
                       </span>
                     </button>
                   )}
 
-                  <div className="h-px bg-slate-100 my-1"></div>
+                  <div className="h-0.5 bg-black w-full opacity-5"></div>
 
                   <button 
                     onClick={toggleVoiceEngine}
-                    className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between group"
+                    className="w-full text-left px-5 py-3 hover:bg-pastel-green flex items-center justify-between group transition-colors"
                   >
-                     <div className="flex items-center gap-3 text-slate-700">
-                       <Zap className="w-4 h-4 text-slate-400 group-hover:text-indigo-500" />
+                     <div className="flex items-center gap-3 text-slate-800 font-bold">
+                       <Zap className="w-4 h-4" />
                        <span className="text-sm">{t.voiceEngine}</span>
                      </div>
                      <div className="flex items-center gap-1">
-                       {voiceEngine === 'ai' && <Star className="w-3 h-3 text-amber-400 fill-current" />}
-                       <span className={`text-xs font-bold px-2 py-1 rounded ${voiceEngine === 'ai' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-600'}`}>
+                       {voiceEngine === 'ai' && <Star className="w-3 h-3 text-amber-500 fill-current" />}
+                       <span className={`text-xs font-black px-2 py-1 rounded ${voiceEngine === 'ai' ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
                          {voiceEngine === 'system' ? t.engineSystem : t.engineAi}
                        </span>
                      </div>
                   </button>
 
-                  <div className="h-px bg-slate-100 my-1"></div>
+                  <div className="h-0.5 bg-black w-full opacity-5"></div>
 
                   <button 
                     onClick={() => {
@@ -826,13 +720,13 @@ export default function App() {
                       setIsQuotaExceeded(false);
                       setShowApiKeyModal(true);
                     }}
-                    className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between group"
+                    className="w-full text-left px-5 py-3 hover:bg-pastel-yellow flex items-center justify-between group transition-colors"
                   >
-                     <div className="flex items-center gap-3 text-slate-700">
-                       <Key className="w-4 h-4 text-slate-400 group-hover:text-indigo-500" />
+                     <div className="flex items-center gap-3 text-slate-800 font-bold">
+                       <Key className="w-4 h-4" />
                        <span className="text-sm">API Key</span>
                      </div>
-                     <span className={`text-xs font-bold px-2 py-1 rounded ${customApiKey ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
+                     <span className={`text-xs font-black px-2 py-1 rounded ${customApiKey ? 'bg-green-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
                        {customApiKey ? 'Custom' : 'Free'}
                      </span>
                   </button>
@@ -877,37 +771,39 @@ export default function App() {
         {viewState === ViewState.GENERATING && (
           <div className="flex flex-col items-center justify-center h-full text-center px-6 overflow-y-auto">
             <div className="relative">
-              <div className="absolute inset-0 bg-indigo-200 rounded-full blur-xl opacity-50 animate-pulse"></div>
-              <Loader2 className="w-16 h-16 text-indigo-600 animate-spin relative z-10" />
+              <div className="absolute inset-0 bg-pastel-blue rounded-full blur-xl opacity-80 animate-pulse"></div>
+              <div className="relative bg-white border-2 border-black rounded-full p-4 shadow-neo">
+                 <Loader2 className="w-12 h-12 text-black animate-spin" />
+              </div>
             </div>
             
-            <div className="mt-8 h-16 flex flex-col items-center">
-               <h2 className="text-2xl font-bold text-slate-800 animate-in fade-in duration-500 key={loadingStep}">
+            <div className="mt-10 h-24 flex flex-col items-center w-full max-w-md">
+               <h2 className="text-3xl font-serif font-black text-black animate-in fade-in duration-500 key={loadingStep} mb-6">
                  {t.loadingSteps[Math.min(loadingStep, 2)]} 
                </h2>
-               <div className="flex gap-2 mt-4">
+               <div className="flex gap-3 w-full justify-center">
                   {[0, 1, 2].map((_, idx) => (
                     <div 
                       key={idx}
-                      className={`h-1.5 rounded-full transition-all duration-300 ${
-                        idx === loadingStep ? 'w-6 bg-indigo-600' : idx < loadingStep ? 'w-2 bg-indigo-200' : 'w-2 bg-slate-200'
+                      className={`h-4 rounded-full border-2 border-black transition-all duration-500 ${
+                        idx === loadingStep ? 'w-16 bg-pastel-green' : idx < loadingStep ? 'w-4 bg-black' : 'w-4 bg-white'
                       }`}
                     ></div>
                   ))}
                </div>
             </div>
 
-            <p className="mt-6 text-slate-500 max-w-md">
-              <span className="font-semibold text-indigo-600 block mb-1 text-lg">"{loadingScenarioName}"</span>
-              <span className="text-sm opacity-80">{t.constructingDesc}</span>
+            <p className="mt-8 text-slate-600 max-w-md bg-white border-2 border-black p-4 rounded-xl shadow-sm">
+              <span className="font-bold text-black block mb-1 text-lg">"{loadingScenarioName}"</span>
+              <span className="text-sm">{t.constructingDesc}</span>
             </p>
           </div>
         )}
 
         {viewState === ViewState.LOADING_SHARE && (
           <div className="flex flex-col items-center justify-center h-full text-center px-6 overflow-y-auto">
-            <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
-            <h2 className="text-xl font-bold text-slate-800">{t.loadingShare}</h2>
+            <Loader2 className="w-12 h-12 text-black animate-spin mb-4" />
+            <h2 className="text-xl font-bold text-black">{t.loadingShare}</h2>
           </div>
         )}
 
@@ -935,21 +831,21 @@ export default function App() {
 
         {viewState === ViewState.ERROR && (
           <div className="flex flex-col items-center justify-center h-full text-center px-6 overflow-y-auto">
-            <div className="p-4 bg-red-50 rounded-full mb-4">
-              <AlertCircle className="w-12 h-12 text-red-500" />
+            <div className="p-6 bg-red-100 rounded-full mb-6 border-2 border-black shadow-neo">
+              <AlertCircle className="w-12 h-12 text-red-600" />
             </div>
-            <h2 className="text-xl font-bold text-slate-800 mb-2">{t.errorTitle}</h2>
-            <p className="text-slate-500 mb-6 max-w-sm">{errorMsg}</p>
+            <h2 className="text-2xl font-black text-black mb-3">{t.errorTitle}</h2>
+            <p className="text-slate-600 mb-8 max-w-sm font-medium">{errorMsg}</p>
             <div className="flex gap-4">
               <button 
                 onClick={handleBack}
-                className="px-6 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium"
+                className="px-8 py-3 rounded-xl border-2 border-black text-black hover:bg-white bg-slate-100 font-bold shadow-neo-sm hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
               >
                 {t.goHome}
               </button>
               <button 
                 onClick={handleRetry}
-                className="px-6 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-medium flex items-center gap-2"
+                className="px-8 py-3 rounded-xl border-2 border-black bg-pastel-green text-black hover:bg-pastel-green/80 font-bold flex items-center gap-2 shadow-neo hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
               >
                 <RefreshCw className="w-4 h-4" />
                 {t.tryAgain}

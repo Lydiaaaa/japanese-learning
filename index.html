@@ -4,11 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Saynario</title>
-    <!-- Updated Favicon: Solid Blue #1996de Background -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNMjU2IDMyQzEzMi4zIDMyIDMyIDEyMS43IDMyIDIzMmMwIDU4LjYgMjguMyAxMTEuNCA3NC40IDE0OC42LTMuOCAxNy0xNC44IDM5LjgtMzcuNCA2MS4zLTQuOCA0LjYtMi4yIDEyLjggNC40IDEzLjUgNjQuOSA2LjggMTA4LjYtMjIuMSAxMjcuMy0zNi42IDE3LjUgNS41IDM2LjEgOC41IDU1LjMgOC41IDEyMy43IDAgMjI0LTg5LjcgMjI0LTIwMFMzNzkuNyAzMiAyNTYgMzJ6IiBmaWxsPSIjMTk5NmRlIi8+PGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMjU2LCAyMzIpIHNjYWxlKDAuOSkiPjxjaXJjbGUgY3g9IjAiIGN5PSIwIiByPSIxNSIgZmlsbD0id2hpdGUiIG9wYWNpdHk9IjAuOSIvPjxwYXRoIHRyYW5zZm9ybT0icm90YXRlKDApIHRyYW5zbGF0ZSgwLCAtMzUpIiBkPSJNMCAwIEMtMTUgLTMwLCAtMzUgLTUwLCAtMzUgLTgwIEMtMzUgLTExMCwgLTEwIC0xMjAsIDAgLTEwNSBDMTAgLTEyMCwgMzUgLTExMCwgMzUgLTgwIEMzNSAtNTAsIDE1IC0zMCwgMCAwIFoiIGZpbGw9IndoaXRlIi8+PHBhdGggdHJhbnNmb3JtPSJyb3RhdGUoNzIpIHRyYW5zbGF0ZSgwLCAtMzUpIiBkPSJNMCAwIEMtMTUgLTMwLCAtMzUgLTUwLCAtMzUgLTgwIEMtMzUgLTExMCwgLTEwIC0xMjAsIDAgLTEwNSBDMTAgLTEyMCwgMzUgLTExMCwgMzUgLTgwIEMzNSAtNTAsIDE1IC0zMCwgMCAwIFoiIGZpbGw9IndoaXRlIi8+PHBhdGggdHJhbnNmb3JtPSJyb3RhdGUoMTQ0KSB0cmFuc2xhdGUoMCwgLTM1KSIgZD0iTTAgMCBDLTE1IC0zMCwgLTM1IC01MCwgLTM1IC04MCBDLTM1IC0xMTAsIC0xMCAtMTIwLCAwIC0xMDUgQzEwIC0xMjAsIDM1IC0xMTAsIDM1IC04MCBDMzUgLTUwLCAxNSAtMzAsIDAgMCBaIiBmaWxsPSJ3aGl0ZSIvPjxwYXRoIHRyYW5zZm9ybT0icm90YXRlKDIxNikgdHJhbnNsYXRlKDAsIC0zNSkiIGQ9Ik0wIDAgQy0xNSAtMzAsIC0zNSAtNTAsIC0zNSAtODAgQy0zNSAtMTEwLCAtMTAgLTEyMCwgMCAtMTA1IEMxMCAtMTIwLCAzNSAtMTEwLCAzNSAtODAgQzM1IC01MCwgMTUgLTMwLCAwIDAgWiIgZmlsbD0id2hpdGUiLz48cGF0aCB0cmFuc2Zvcm09InJvdGF0ZSgyODgpIHRyYW5zbGF0ZSgwLCAtMzUpIiBkPSJNMCAwIEMtMTUgLTMwLCAtMzUgLTUwLCAtMzUgLTgwIEMtMzUgLTExMCwgLTEwIC0xMjAsIDAgLTEwNSBDMTAgLTEyMCwgMzUgLTExMCwgMzUgLTgwIEMzNSAtNTAsIDE1IC0zMCwgMCAwIFoiIGZpbGw9IndoaXRlIi8+PC9nPjwvc3ZnPg==">
+    <!-- Updated Favicon: Solid Black Background for Pop Style -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNMjU2IDMyQzEzMi4zIDMyIDMyIDEyMS43IDMyIDIzMmMwIDU4LjYgMjguMyAxMTEuNCA3NC40IDE0OC42LTMuOCAxNy0xNC44IDM5LjgtMzcuNCA2MS4zLTQuOCA0LjYtMi4yIDEyMy44IDQuNCAxMy41IDY0LjkgNi44IDEwOC42LTIyLjEgMTI3LjMtMzYuNiAxNy41IDUuNSAzNi4xIDguNSA1NS4zIDguNSAxMjMuNyAwIDIyNC04OS43IDIyNC0yMDBTMzc5LjcgMzIgMjU2IDMyeiIgZmlsbD0iIzAwMDAwMCIvPjwvc3ZnPg==">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // Polyfill process for AI Studio Preview environments to prevent "process is not defined" error
+      // Polyfill process for AI Studio Preview environments
       if (typeof process === 'undefined') {
         window.process = { env: {} };
       }
@@ -16,26 +16,48 @@
       tailwind.config = {
         theme: {
           extend: {
+            fontFamily: {
+              sans: ['Inter', 'Noto Sans JP', 'sans-serif'],
+              serif: ['Fraunces', 'serif'],
+              display: ['Kalnia', 'serif'], // New Brand Font
+            },
             colors: {
+              'pastel-bg': '#FFFDF7',
+              'pastel-green': '#B6F09C',
+              'pastel-blue': '#D1F4EE',
+              'pastel-pink': '#FFC2E2',
+              'pastel-yellow': '#FAE6B1',
+              'pastel-purple': '#E0C3FC',
+              // New "Vibrant Violet" theme color (replacing the old Electric Blurple)
+              // This aligns better with Pop Style and the pastel palette.
               indigo: {
-                50: '#f0f9ff',
-                100: '#e0f2fe',
-                200: '#bae6fd',
-                300: '#7dd3fc',
-                400: '#38bdf8',
-                500: '#0ea5e9',
-                600: '#1996de',
-                700: '#0284c7',
-                800: '#0369a1',
-                900: '#075985',
-                950: '#0c4a6e',
+                50: '#f5f3ff',
+                100: '#ede9fe',
+                200: '#ddd6fe',
+                300: '#c4b5fd',
+                400: '#a78bfa',
+                500: '#8b5cf6',
+                600: '#7c3aed', // Primary Brand Accent (Violet)
+                700: '#6d28d9',
+                800: '#5b21b6',
+                900: '#4c1d95',
+                950: '#2e1065',
               }
+            },
+            boxShadow: {
+              'neo': '4px 4px 0px 0px rgba(0,0,0,1)',
+              'neo-sm': '2px 2px 0px 0px rgba(0,0,0,1)',
+              'neo-lg': '6px 6px 0px 0px rgba(0,0,0,1)',
+            },
+            borderRadius: {
+              // Overriding default radius utilities if needed, but manual class updates are safer
             }
           }
         }
       }
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Added Kalnia font -->
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;400;600;700;900&family=Kalnia:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
       html, body {
         height: 100%;
@@ -44,7 +66,11 @@
       }
       body {
         font-family: 'Inter', 'Noto Sans JP', sans-serif;
-        background-color: #f8fafc;
+        background-color: #FFFDF7; /* Matches pastel-bg */
+        color: #1a1a1a;
+      }
+      h1, h2, h3, h4, h5, h6 {
+        font-family: 'Fraunces', serif;
       }
       .no-scrollbar::-webkit-scrollbar {
         display: none;

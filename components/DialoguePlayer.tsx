@@ -69,13 +69,9 @@ export const DialoguePlayer: React.FC<Props> = ({
     }
   }, [activeSectionIdx, isAddingSceneMode]);
 
-  // When sections length increases (new scene added), select the new scene
   useEffect(() => {
      if (sections && sections.length > 0) {
-         // If we were adding a scene, and now sections count increased, select the last one
-         // Note: We need a way to know if this is a NEW scene or just initial load.
-         // A simple heuristic: if isCreatingScene becomes false and length > prevLength.
-         // For simplicity, we just check if the last section is populated and we were in adding mode.
+         // Logic for new sections
      }
   }, [sections.length]);
 
@@ -87,7 +83,6 @@ export const DialoguePlayer: React.FC<Props> = ({
     setPlayingLine({ sectionIdx, lineIdx });
     try {
       const voice = speaker === 'A' ? 'Puck' : 'Kore';
-      // Get API Key from localStorage for TTS if available
       const customKey = localStorage.getItem('nihongo_api_key') || undefined;
       await playTTS(text, voice, voiceEngine as VoiceEngine, customKey, targetLanguage as TargetLanguage);
     } catch (error) {
@@ -99,7 +94,6 @@ export const DialoguePlayer: React.FC<Props> = ({
 
   const handleDownloadAudio = async () => {
     const section = sections[activeSectionIdx];
-    // Safeguard against missing lines
     if (!section || !section.lines || !Array.isArray(section.lines) || isDownloadingAudio) return;
 
     setIsDownloadingAudio(true);
@@ -111,7 +105,6 @@ export const DialoguePlayer: React.FC<Props> = ({
             speaker: line.speaker
         }));
         
-        // Get API Key from localStorage for TTS if available
         const customKey = localStorage.getItem('nihongo_api_key') || undefined;
 
         const wavBlob = await generateDialogueAudioWithProgress(
@@ -162,7 +155,6 @@ export const DialoguePlayer: React.FC<Props> = ({
           await onAddScene(newScenePrompt.trim());
           setNewScenePrompt('');
           setIsAddingSceneMode(false);
-          // Select the new scene (it's the last one now)
           setActiveSectionIdx(sections.length); 
       } catch (err) {
           console.error(err);
@@ -213,18 +205,16 @@ export const DialoguePlayer: React.FC<Props> = ({
     }
   };
 
-  // Helper to check if ANY content exists
   const hasAnyContent = sections && sections.some(s => !!s);
   
-  // If absolutely nothing exists and we are NOT generating, show empty state
   if (!hasAnyContent && !isGenerating) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 bg-slate-50 rounded-2xl border border-slate-100 border-dashed text-slate-400 p-8">
-        <p className="mb-4">No dialogues available</p>
+      <div className="flex flex-col items-center justify-center h-64 bg-white rounded-xl border-2 border-black border-dashed text-slate-400 p-8 shadow-neo">
+        <p className="mb-4 font-bold text-black">No dialogues available</p>
         {onRetry && (
           <button 
             onClick={onRetry}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-sm font-medium text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-all"
+            className="flex items-center gap-2 px-6 py-3 bg-white border-2 border-black shadow-neo-sm rounded-lg text-sm font-bold text-black hover:bg-pastel-yellow transition-all hover:shadow-none"
           >
             <RefreshCw className="w-4 h-4" />
             <span>Regenerate</span>
@@ -235,8 +225,6 @@ export const DialoguePlayer: React.FC<Props> = ({
   }
 
   const activeSection = sections[activeSectionIdx];
-  
-  // Determine if this specific section is loading.
   const isSectionLoading = 
     !activeSection || 
     retryingSceneIdx === activeSectionIdx || 
@@ -245,35 +233,36 @@ export const DialoguePlayer: React.FC<Props> = ({
   return (
     <div className="flex flex-col md:flex-row gap-6 h-full items-start">
       {/* Sidebar Navigation */}
-      <div className="md:w-64 flex-shrink-0 flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-2 md:pb-0 no-scrollbar md:sticky md:top-6 self-start z-10">
+      <div className="md:w-64 flex-shrink-0 flex flex-row md:flex-col gap-3 overflow-x-auto md:overflow-visible pb-2 md:pb-0 no-scrollbar md:sticky md:top-6 self-start z-10 p-1">
         {sections.map((sec, idx) => {
           const isActive = idx === activeSectionIdx && !isAddingSceneMode;
           const isLoaded = sec && sec.lines && sec.lines.length > 0;
           const isProcessing = isGenerating && (!sec || !sec.lines || sec.lines.length === 0);
           
           return (
+            // Sidebar buttons: rounded-xl -> rounded-lg
             <button
               key={idx}
               disabled={!isLoaded && !isProcessing && idx !== activeSectionIdx} 
               onClick={() => { setActiveSectionIdx(idx); setIsAddingSceneMode(false); }}
-              className={`flex-shrink-0 flex items-center gap-3 p-3 rounded-xl border text-left transition-all relative overflow-hidden ${
+              className={`flex-shrink-0 flex items-center gap-3 p-3 rounded-lg border-2 text-left transition-all relative overflow-hidden ${
                 isActive 
-                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
-                  : 'bg-white border-slate-100 text-slate-600 hover:border-indigo-200 hover:bg-slate-50'
-              } ${!isLoaded && !isActive && !isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  ? 'bg-black border-black text-white' 
+                  : 'bg-white border-black text-slate-600 hover:bg-pastel-yellow'
+              } ${!isLoaded && !isActive && !isProcessing ? 'opacity-50 cursor-not-allowed border-dashed' : ''}`}
             >
               {isProcessing && (
                  <div className="absolute inset-0 bg-slate-200/30 animate-pulse"></div>
               )}
 
-              <div className={`p-2 rounded-lg relative z-10 ${isActive ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+              <div className={`p-2 rounded-md border-2 border-black relative z-10 ${isActive ? 'bg-white text-black' : 'bg-slate-100 text-slate-400'}`}>
                 {isLoaded ? <MessageSquare className="w-4 h-4" /> : <Loader2 className="w-4 h-4 animate-spin" />}
               </div>
               <div className="flex-1 min-w-0 relative z-10">
-                <div className={`text-xs font-bold uppercase mb-0.5 ${isActive ? 'text-indigo-200' : 'text-slate-400'}`}>
+                <div className={`text-[10px] font-black uppercase mb-0.5 ${isActive ? 'text-white/70' : 'text-slate-400'}`}>
                   {idx < 3 ? `${t.scene} ${idx + 1}` : (language === 'zh' ? `自定义 ${idx - 2}` : `Custom ${idx - 2}`)}
                 </div>
-                <div className={`font-bold text-sm truncate ${isActive ? 'text-white' : 'text-slate-700'}`}>
+                <div className={`font-bold text-sm truncate ${isActive ? 'text-white' : 'text-slate-900'}`}>
                   {sec ? sec.title : "..."}
                 </div>
               </div>
@@ -286,10 +275,10 @@ export const DialoguePlayer: React.FC<Props> = ({
             <button
                 onClick={() => setIsAddingSceneMode(true)}
                 disabled={isCreatingScene}
-                className={`flex-shrink-0 flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed transition-all ${
+                className={`flex-shrink-0 flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed transition-all ${
                     isAddingSceneMode 
-                        ? 'border-indigo-400 bg-indigo-50 text-indigo-600'
-                        : 'border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-white'
+                        ? 'border-indigo-600 bg-indigo-50 text-indigo-600'
+                        : 'border-slate-300 text-slate-400 hover:border-black hover:text-black hover:bg-white'
                 }`}
             >
                 {isCreatingScene ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
@@ -298,20 +287,20 @@ export const DialoguePlayer: React.FC<Props> = ({
         )}
       </div>
 
-      {/* Main Content Area */}
-      <div ref={contentTopRef} className="flex-1 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col min-h-[500px] w-full">
+      {/* Main Content Area: rounded-2xl -> rounded-xl */}
+      <div ref={contentTopRef} className="flex-1 bg-white rounded-xl border-2 border-black flex flex-col min-h-[500px] w-full relative">
         
         {isAddingSceneMode ? (
             // New Scene Creation Form
             <div className="flex flex-col items-center justify-center h-full p-8 text-center flex-1 animate-in fade-in zoom-in-95 duration-300">
                 <div className="w-full max-w-md">
-                    <div className="bg-indigo-50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-6">
-                        <PenTool className="w-8 h-8 text-indigo-500" />
+                    <div className="bg-pastel-purple p-4 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6 border-2 border-black shadow-neo-sm">
+                        <PenTool className="w-8 h-8 text-black" />
                     </div>
-                    <h3 className="text-xl font-bold text-slate-800 mb-2">
+                    <h3 className="text-xl font-black text-black mb-2">
                         {language === 'zh' ? '你想在这个场景下聊什么？' : 'What specific conversation do you want?'}
                     </h3>
-                    <p className="text-slate-500 text-sm mb-6">
+                    <p className="text-slate-500 text-sm mb-6 font-medium">
                         {language === 'zh' 
                             ? '例如：“询问有没有靠窗的位置”、“结账时发现钱不够了”' 
                             : 'E.g., "Asking for a window seat", "Realizing I forgot my wallet"'}
@@ -322,21 +311,21 @@ export const DialoguePlayer: React.FC<Props> = ({
                             value={newScenePrompt}
                             onChange={(e) => setNewScenePrompt(e.target.value)}
                             placeholder={language === 'zh' ? '输入对话主题...' : 'Describe the conversation...'}
-                            className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all min-h-[120px] resize-none mb-4 text-slate-700"
+                            className="w-full p-4 rounded-lg border-2 border-black bg-white focus:bg-white focus:ring-0 focus:shadow-neo-sm outline-none transition-all min-h-[120px] resize-none mb-4 text-black font-medium"
                             autoFocus
                         />
                         <div className="flex gap-3">
                             <button
                                 type="button"
                                 onClick={() => setIsAddingSceneMode(false)}
-                                className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-colors"
+                                className="flex-1 py-3 rounded-lg border-2 border-black text-black font-bold hover:bg-slate-50 transition-colors"
                             >
                                 {language === 'zh' ? '取消' : 'Cancel'}
                             </button>
                             <button
                                 type="submit"
                                 disabled={!newScenePrompt.trim() || isCreatingScene}
-                                className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                className="flex-1 py-3 rounded-lg bg-black border-2 border-black text-white font-bold hover:bg-slate-800 transition-colors shadow-neo-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
                                 {isCreatingScene && <Loader2 className="w-4 h-4 animate-spin" />}
                                 {language === 'zh' ? '生成对话' : 'Generate'}
@@ -348,40 +337,38 @@ export const DialoguePlayer: React.FC<Props> = ({
         ) : isSectionLoading ? (
            // Skeleton for Active Loading Section
            <div className="flex flex-col items-center justify-center h-full p-8 text-center flex-1 animate-in fade-in zoom-in-95 duration-500">
-              <div className="relative mb-6">
-                 <div className="absolute inset-0 bg-indigo-200 rounded-full blur-xl opacity-40 animate-pulse"></div>
-                 <div className="relative bg-white p-4 rounded-full shadow-sm border border-indigo-100">
-                    <PenTool className="w-8 h-8 text-indigo-500 animate-bounce" style={{ animationDuration: '3s' }} />
+              <div className="relative mb-8">
+                 <div className="absolute inset-0 bg-pastel-green rounded-full blur-xl opacity-60 animate-pulse"></div>
+                 <div className="relative bg-white p-6 rounded-full shadow-neo border-2 border-black">
+                    <PenTool className="w-10 h-10 text-black animate-bounce" style={{ animationDuration: '3s' }} />
                  </div>
               </div>
-              <h3 className="text-lg font-bold text-slate-800">{t.writingScene}</h3>
-              <p className="text-slate-400 mt-2 max-w-sm text-sm">
+              <h3 className="text-2xl font-black text-black">{t.writingScene}</h3>
+              <p className="text-slate-500 mt-2 max-w-sm text-sm font-medium">
                  {t.writingDesc}
               </p>
            </div>
         ) : (
            // Loaded Content
            <>
-            <div className="p-4 md:p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/50 rounded-t-2xl">
-              <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                <span className="bg-indigo-100 text-indigo-600 text-xs px-2 py-1 rounded-md uppercase">
+            <div className="p-4 md:p-6 border-b-2 border-black flex items-center justify-between bg-slate-50 rounded-t-lg">
+              <h3 className="font-bold text-lg text-black flex items-center gap-3">
+                <span className="bg-black text-white text-xs px-2 py-1 rounded-md uppercase font-black tracking-wide">
                     {activeSectionIdx < 3 ? `${t.scene} ${activeSectionIdx + 1}` : (language === 'zh' ? `自定义` : `Custom`)}
                 </span>
-                {activeSection.title}
+                <span className="font-serif text-xl">{activeSection.title}</span>
               </h3>
               <button 
                  onClick={handleDownloadAudio}
-                 // Disable if downloading OR lines are missing/empty
                  disabled={isDownloadingAudio || !activeSection.lines || activeSection.lines.length === 0}
-                 className="flex items-center gap-2 text-xs font-medium bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px] justify-center"
+                 className="flex items-center gap-2 text-xs font-bold bg-white text-black hover:bg-pastel-blue px-3 py-1.5 rounded-lg border-2 border-black transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px] justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]"
               >
                  {isDownloadingAudio ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Download className="w-3.5 h-3.5" />}
                  {isDownloadingAudio ? (downloadProgress || t.generatingAudio) : t.downloadAudio}
               </button>
             </div>
 
-            <div className="p-4 md:p-6 space-y-6">
-              {/* Defensive Check: Ensure lines exist and are an array */}
+            <div className="p-4 md:p-6 space-y-6 bg-white rounded-b-lg">
               {activeSection.lines && Array.isArray(activeSection.lines) && activeSection.lines.length > 0 ? (
                   activeSection.lines.map((line, lIdx) => {
                     const isPlaying = playingLine?.sectionIdx === activeSectionIdx && playingLine?.lineIdx === lIdx;
@@ -390,51 +377,49 @@ export const DialoguePlayer: React.FC<Props> = ({
                     const isUser = line.speaker === 'A'; 
                     const translation = getTranslation(line.translation, language);
 
-                    // Determine if we show script/phonetics
                     let script = "";
                     if (targetLanguage === 'ja') {
                         script = notation === 'kana' ? line.kana : line.romaji;
                     } else if (targetLanguage === 'zh' || targetLanguage === 'ko') {
-                        // Use romaji field for Pinyin/Romanization. Kana field is duplicate or secondary script.
                         script = line.romaji || line.kana;
                     } 
-                    // For European languages, script is usually empty or irrelevant, so we hide the line if empty.
 
                     return (
                       <div key={lIdx} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[90%] md:max-w-[80%] flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
                           
                           <div className="flex items-center gap-2 px-1">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                               {line.roleName || `${t.speaker} ${line.speaker}`}
                             </span>
                           </div>
 
-                          <div className={`p-4 md:p-5 rounded-2xl text-lg font-medium relative group transition-all duration-300 ${
+                          {/* Dialogue Bubble: rounded-2xl -> rounded-xl */}
+                          <div className={`p-5 rounded-xl text-lg font-medium relative group transition-all duration-300 border-2 ${
                               isUser 
-                                ? 'bg-indigo-50 border border-indigo-100 text-slate-800 rounded-tr-sm' 
-                                : 'bg-white border border-slate-100 text-slate-800 rounded-tl-sm shadow-sm' 
-                            } ${isPlaying ? 'ring-4 ring-indigo-100' : ''}`}>
+                                ? 'bg-pastel-green border-black text-black rounded-tr-none' 
+                                : 'bg-white border-black text-black rounded-tl-none' 
+                            } ${isPlaying ? 'ring-2 ring-black' : ''}`}>
                             
-                            <div className="mb-1 leading-relaxed">{line.japanese}</div>
+                            <div className="mb-1 leading-relaxed font-bold">{line.japanese}</div>
                             
                             {script && (
-                                <div className={`text-sm font-normal mb-3 pb-2 border-b border-dashed ${
-                                isUser ? 'text-indigo-600 border-indigo-200' : 'text-indigo-600 border-slate-100'
+                                <div className={`text-sm font-bold mb-3 pb-2 border-b-2 border-dashed ${
+                                isUser ? 'text-black border-black/20' : 'text-indigo-600 border-slate-200'
                                 }`}>
                                     {script}
                                 </div>
                             )}
 
-                            <p className={`text-sm font-normal text-slate-500`}>
+                            <p className={`text-sm font-medium ${isUser ? 'text-black/70' : 'text-slate-500'}`}>
                               {translation}
                             </p>
                             
-                            <div className={`flex gap-2 mt-3 pt-1 justify-end opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity`}>
+                            <div className={`flex gap-2 mt-3 pt-2 justify-end opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity`}>
                                 <button 
                                   onClick={() => handlePlayLine(activeSectionIdx, lIdx, line.japanese, line.speaker)}
-                                  className={`p-1.5 rounded-full transition-all bg-white border border-slate-100 shadow-sm ${
-                                    isPlaying ? 'text-indigo-600 ring-2 ring-indigo-100' : 'text-slate-500 hover:text-indigo-600 hover:border-indigo-200'
+                                  className={`p-2 rounded-full transition-all border-2 border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-[1px] active:translate-x-[1px] ${
+                                    isPlaying ? 'bg-black text-white' : 'bg-white text-black hover:bg-pastel-blue'
                                   }`}
                                   title={t.listen}
                                 >
@@ -444,8 +429,8 @@ export const DialoguePlayer: React.FC<Props> = ({
                                 {!isRecording ? (
                                   <button 
                                     onClick={() => startRecording(activeSectionIdx, lIdx)}
-                                    className={`p-1.5 rounded-full transition-all bg-white border border-slate-100 shadow-sm ${
-                                      hasRecording ? 'text-emerald-500 border-emerald-200' : 'text-slate-500 hover:text-indigo-600 hover:border-indigo-200'
+                                    className={`p-2 rounded-full transition-all border-2 border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-[1px] active:translate-x-[1px] ${
+                                      hasRecording ? 'bg-pastel-green text-black' : 'bg-white text-black hover:bg-pastel-pink'
                                     }`}
                                     title={t.record}
                                   >
@@ -454,7 +439,7 @@ export const DialoguePlayer: React.FC<Props> = ({
                                 ) : (
                                   <button 
                                     onClick={stopRecording}
-                                    className="p-1.5 rounded-full bg-red-500 text-white animate-pulse shadow-sm"
+                                    className="p-2 rounded-full bg-red-500 text-white animate-pulse border-2 border-black shadow-sm"
                                     title={t.stop}
                                   >
                                     <div className="w-3.5 h-3.5 bg-white rounded-sm" />
@@ -464,10 +449,10 @@ export const DialoguePlayer: React.FC<Props> = ({
                                 {hasRecording && !isRecording && (
                                   <button
                                     onClick={() => playRecording(activeSectionIdx, lIdx)}
-                                    className="p-1.5 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100 shadow-sm"
+                                    className="p-2 rounded-full bg-white text-green-600 border-2 border-green-600 hover:bg-green-50 shadow-sm"
                                     title={t.playMy}
                                   >
-                                    <Play className="w-3.5 h-3.5" />
+                                    <Play className="w-3.5 h-3.5 fill-current" />
                                   </button>
                                 )}
                             </div>
@@ -477,8 +462,8 @@ export const DialoguePlayer: React.FC<Props> = ({
                     );
                   })
               ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                    <div className="p-3 bg-white rounded-full mb-3 shadow-sm">
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                    <div className="p-3 bg-white rounded-full mb-3 shadow-sm border border-slate-200">
                       <MessageSquare className="w-6 h-6 text-slate-300" />
                     </div>
                     <p className="mb-2 font-bold text-slate-600">{t.contentUnavailable}</p>
@@ -487,7 +472,7 @@ export const DialoguePlayer: React.FC<Props> = ({
                         <button 
                           onClick={handleRetryClick}
                           disabled={retryingSceneIdx !== null}
-                          className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 shadow-sm rounded-full text-sm font-bold text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 transition-all disabled:opacity-50"
+                          className="flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-black shadow-neo-sm rounded-lg text-sm font-bold text-black hover:bg-pastel-yellow transition-all disabled:opacity-50 hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]"
                         >
                             {retryingSceneIdx !== null ? <Loader2 className="w-4 h-4 animate-spin"/> : <RefreshCw className="w-4 h-4" />}
                             {t.retrySection}
