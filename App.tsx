@@ -614,8 +614,11 @@ export default function App() {
     setVoiceEngine(prev => prev === 'system' ? 'ai' : 'system');
   };
 
+  // Determine App-level Font Class based on UI Language
+  const appFontClass = language === 'zh' ? 'font-cn' : 'font-sans';
+
   return (
-    <div className="h-screen flex flex-col bg-pastel-bg text-slate-900 font-sans overflow-hidden">
+    <div className={`h-screen flex flex-col bg-pastel-bg text-slate-900 overflow-hidden ${appFontClass}`}>
       
       <ApiKeyModal 
         isOpen={showApiKeyModal} 

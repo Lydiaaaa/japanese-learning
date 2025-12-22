@@ -142,9 +142,9 @@ export const StudyView: React.FC<StudyViewProps> = ({
       <html>
       <head>
         <title>${content.scenarioName} - Study Guide</title>
-        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
         <style>
-          body { font-family: 'Noto Sans JP', sans-serif; color: #000; padding: 40px; }
+          body { font-family: 'Noto Sans JP', 'Noto Sans SC', sans-serif; color: #000; padding: 40px; }
           h1 { font-size: 24px; border-bottom: 2px solid #000; padding-bottom: 16px; margin-bottom: 32px; }
           .item { margin-bottom: 12px; }
           .vocab-term { font-weight: 700; font-size: 16px; }
@@ -166,6 +166,9 @@ export const StudyView: React.FC<StudyViewProps> = ({
     }
     setIsShareOpen(false);
   };
+
+  // Determine specific font class based on target language
+  const contentFontClass = content.targetLanguage === 'zh' ? 'font-cn' : (content.targetLanguage === 'ja' ? 'font-jp' : '');
 
   return (
     <div className="flex flex-col h-full w-full bg-pastel-bg">
@@ -196,13 +199,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
 
                {/* Share Dropdown */}
                <div className="relative" ref={shareMenuRef}>
-                 {/* 
-                    UPDATED SHARE BUTTON:
-                    - Changed to white background (bg-white)
-                    - Changed text to black (text-black)
-                    - Added shadow-neo-sm for visibility
-                    - Added hover/active interaction
-                 */}
                  <button
                    onClick={() => setIsShareOpen(!isShareOpen)}
                    className="flex items-center gap-2 px-4 py-2 bg-white text-black border-2 border-black rounded-lg text-sm font-bold shadow-neo-sm hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all active:scale-95"
@@ -269,7 +265,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto no-scrollbar w-full"
       >
-        <div className="mx-auto pb-10 pt-6 transition-all duration-300 ease-in-out max-w-6xl px-4">
+        {/* Applied contentFontClass here to encompass all learning content */}
+        <div className={`mx-auto pb-10 pt-6 transition-all duration-300 ease-in-out max-w-6xl px-4 ${contentFontClass}`}>
           {activeTab === 'vocab' && (
             <VocabularyList 
               items={content.vocabulary} 

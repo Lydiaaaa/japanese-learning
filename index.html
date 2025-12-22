@@ -17,9 +17,19 @@
         theme: {
           extend: {
             fontFamily: {
-              sans: ['Inter', 'Noto Sans JP', 'sans-serif'],
+              // Default fallback
+              sans: ['Inter', 'sans-serif'],
               serif: ['Fraunces', 'serif'],
-              display: ['Kalnia', 'serif'], // New Brand Font
+              
+              // Quotes added to font names to ensure correct parsing
+              display: ['"Kalnia"', 'serif'], 
+              
+              // Specific Language Stacks (Priority adjusted)
+              'jp': ['"Noto Sans JP"', 'Inter', 'sans-serif'],
+              'jp-serif': ['"Noto Serif JP"', 'Fraunces', 'serif'],
+              
+              'cn': ['"Noto Sans SC"', 'Inter', 'sans-serif'],
+              'cn-serif': ['"Noto Serif SC"', 'Fraunces', 'serif'],
             },
             colors: {
               'pastel-bg': '#FFFDF7',
@@ -28,20 +38,20 @@
               'pastel-pink': '#FFC2E2',
               'pastel-yellow': '#FAE6B1',
               'pastel-purple': '#E0C3FC',
-              // New "Vibrant Violet" theme color (replacing the old Electric Blurple)
-              // This aligns better with Pop Style and the pastel palette.
+              
+              // New Theme Color Palette based on #8abafa (Sky Blue)
               indigo: {
-                50: '#f5f3ff',
-                100: '#ede9fe',
-                200: '#ddd6fe',
-                300: '#c4b5fd',
-                400: '#a78bfa',
-                500: '#8b5cf6',
-                600: '#7c3aed', // Primary Brand Accent (Violet)
-                700: '#6d28d9',
-                800: '#5b21b6',
-                900: '#4c1d95',
-                950: '#2e1065',
+                50: '#f2f9ff',
+                100: '#e1f2ff',
+                200: '#cce9ff',
+                300: '#a8dbff',
+                400: '#8abafa', // The requested Pastel Sky Blue
+                500: '#5da7eb', // Slightly darker for better visibility
+                600: '#3886cd', // Readable text color (accessible on white)
+                700: '#2b6ba6',
+                800: '#265a88',
+                900: '#234b70',
+                950: '#172f48',
               }
             },
             boxShadow: {
@@ -56,8 +66,8 @@
         }
       }
     </script>
-    <!-- Added Kalnia font -->
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;400;600;700;900&family=Kalnia:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Added Noto Sans/Serif JP and SC fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;400;600;700;900&family=Kalnia:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;700&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
       html, body {
         height: 100%;
@@ -65,7 +75,8 @@
         overscroll-behavior-y: none;
       }
       body {
-        font-family: 'Inter', 'Noto Sans JP', sans-serif;
+        /* Default base font, will be overridden by utility classes in App.tsx */
+        font-family: 'Inter', sans-serif;
         background-color: #FFFDF7; /* Matches pastel-bg */
         color: #1a1a1a;
       }
