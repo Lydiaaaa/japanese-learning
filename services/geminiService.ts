@@ -77,6 +77,18 @@ const getAiInstance = (customKey?: string) => {
   return new GoogleGenAI({ apiKey: key });
 };
 
+// Helper: Log Token Usage
+const logTokenUsage = (label: string, response: any) => {
+  if (response?.usageMetadata) {
+    const { promptTokenCount, candidatesTokenCount, totalTokenCount } = response.usageMetadata;
+    console.groupCollapsed(`[Gemini Cost] ${label}`);
+    console.log(`Input Tokens: ${promptTokenCount}`);
+    console.log(`Output Tokens: ${candidatesTokenCount}`);
+    console.log(`Total Tokens: ${totalTokenCount}`);
+    console.groupEnd();
+  }
+};
+
 // ---------------------------------------------------------------------------
 // ROBUST PARSING HELPERS
 // ---------------------------------------------------------------------------
@@ -271,6 +283,9 @@ export const generateVocabularyAndExpressions = async (
       })
     ]);
 
+    logTokenUsage('Vocab Generation', vocabResponse);
+    logTokenUsage('Expression Generation', exprResponse);
+
     let vocabData: any = {};
     let exprData: any = {};
 
@@ -403,6 +418,8 @@ export const regenerateSection = async (
       }
     });
 
+    logTokenUsage(`Regenerate ${type}`, response);
+
     if (response.text) {
       const cleanText = cleanJsonText(response.text);
       const result = JSON.parse(cleanText);
@@ -512,6 +529,8 @@ export const generateMoreItems = async (
         thinkingConfig: { thinkingBudget: 0 }
       }
     });
+
+    logTokenUsage(`Generate More ${type}`, response);
 
     if (response.text) {
       const cleanText = cleanJsonText(response.text);
@@ -630,6 +649,8 @@ const generateSingleScene = async (
     const response = await Promise.race([fetchPromise, timeoutPromise]);
 
     if (response.text) {
+      logTokenUsage(`Scene ${sceneIndex} (${sceneType})`, response);
+
       const cleanText = cleanJsonText(response.text);
       let parsed: any;
       
