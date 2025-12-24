@@ -6,10 +6,9 @@ import {
   signInWithPopup, 
   GoogleAuthProvider, 
   signOut, 
-  onAuthStateChanged, 
-  Auth
+  onAuthStateChanged
 } from 'firebase/auth';
-import type { User as FirebaseUser } from 'firebase/auth';
+import type { Auth, User as FirebaseUser } from 'firebase/auth';
 import { 
   getFirestore, 
   doc, 
@@ -208,8 +207,11 @@ export const syncUserData = async (uid: string, localData: { favorites: SavedIte
        await setDoc(userRef, localData);
        return localData;
      }
-   } catch (e) {
+   } catch (e: any) {
      console.error("Sync failed", e);
+     if (e?.code === 'permission-denied') {
+        console.warn("⚠️ PERMISSION DENIED: Your Firestore Security Rules may have expired or are too strict.\nPlease go to Firebase Console > Firestore Database > Rules and update them.");
+     }
      return null;
    }
 };
@@ -220,8 +222,11 @@ export const saveUserData = async (uid: string, data: { favorites: SavedItem[], 
   try {
     const userRef = doc(db, 'users', uid);
     await setDoc(userRef, data, { merge: true });
-  } catch (e) {
+  } catch (e: any) {
     console.error("Save failed", e);
+    if (e?.code === 'permission-denied') {
+       console.warn("⚠️ PERMISSION DENIED: Your Firestore Security Rules may have expired or are too strict.\nPlease go to Firebase Console > Firestore Database > Rules and update them.");
+    }
   }
 };
 
